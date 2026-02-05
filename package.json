@@ -1,0 +1,13 @@
+{
+  "name": "solgrid",
+  "private": true,
+  "scripts": {
+    "engine": "cd engine && npx tsx src/main.ts",
+    "dashboard": "cd dashboard && npm run dev",
+    "start": "concurrently \"npm run engine\" \"npm run dashboard\"",
+    "install:all": "cd engine && npm install && cd ../dashboard && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
