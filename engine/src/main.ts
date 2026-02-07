@@ -6,7 +6,8 @@ import { HomeAgent } from './agents/home.js';
 import { BatteryAgent } from './agents/battery.js';
 import { startWebSocketServer, broadcastState } from './server.js';
 import { MarketState } from './market/types.js';
-import { TICK_INTERVAL_MS, LLM_ENABLED, LLM_CALL_INTERVAL } from './config.js';
+import { TICK_INTERVAL_MS, LLM_ENABLED, LLM_CALL_INTERVAL, ADAPTIVE_UPDATE_INTERVAL } from './config.js';
+import { Trade } from './market/types.js';
 import { getAgentDecisions, AgentDecision } from './agents/llm.js';
 import { logger } from './utils/index.js';
 
@@ -46,6 +47,24 @@ async function main() {
   marketplace.registerAgent('solar', solarAgent.keypair, solarAgent.tokenAccountAddress);
   marketplace.registerAgent('home', homeAgent.keypair, homeAgent.tokenAccountAddress);
   marketplace.registerAgent('battery', batteryAgent.keypair, batteryAgent.tokenAccountAddress);
+
+  // Connect trade callback for memory tracking
+  marketplace.onTradeExecuted = (trade: Trade) => {
+    const marketPrice = marketplace.pricing.getPrice();
+
+    if (trade.sellerId === solarAgent.id) {
+      solarAgent.recordTrade('sell', trade.amount, trade.pricePerUnit, marketPrice);
+    }
+    if (trade.buyerId === homeAgent.id) {
+      homeAgent.recordTrade('buy', trade.amount, trade.pricePerUnit, marketPrice);
+    }
+    if (trade.sellerId === batteryAgent.id) {
+      batteryAgent.recordTrade('sell', trade.amount, trade.pricePerUnit, marketPrice);
+    }
+    if (trade.buyerId === batteryAgent.id) {
+      batteryAgent.recordTrade('buy', trade.amount, trade.pricePerUnit, marketPrice);
+    }
+  };
 
   // Create simulated clock
   const clock = new SimulatedClock();
@@ -116,6 +135,19 @@ async function main() {
 
       // 4. Battery agent: evaluate + trade
       await batteryAgent.tick(marketplace, batteryBalance, batteryDecision ?? undefined);
+
+      // 4.5 Update adaptive parameters every ADAPTIVE_UPDATE_INTERVAL ticks
+      if (clock.getTickCount() % ADAPTIVE_UPDATE_INTERVAL === 0) {
+        solarAgent.updateAdaptiveParams();
+        homeAgent.updateAdaptiveParams();
+        batteryAgent.updateAdaptiveParams();
+
+        logger.info('ADAPT', 'Updated adaptive parameters', {
+          solar: { risk: solarAgent.memory.riskLevel.toFixed(2), profit: solarAgent.memory.totalProfit.toFixed(4) },
+          home: { risk: homeAgent.memory.riskLevel.toFixed(2), profit: homeAgent.memory.totalProfit.toFixed(4) },
+          battery: { risk: batteryAgent.memory.riskLevel.toFixed(2), profit: batteryAgent.memory.totalProfit.toFixed(4) },
+        });
+      }
 
       // 5. Capture supply/demand BEFORE matching (for price discovery)
       const supplyBeforeMatch = marketplace.orderbook.getTotalSupply();

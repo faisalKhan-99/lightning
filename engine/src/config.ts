@@ -47,3 +47,10 @@ export const COLOSSEUM_AGENT_ID = process.env.COLOSSEUM_AGENT_ID || '';
 export const COLOSSEUM_API_BASE = 'https://agents.colosseum.com/api';
 export const COLOSSEUM_ENABLED = !!process.env.COLOSSEUM_API_KEY;
 export const HEARTBEAT_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Adaptive Strategy Settings
+export const ADAPTIVE_UPDATE_INTERVAL = 6;    // Update every 6 ticks (6 hours)
+export const MEMORY_HISTORY_LENGTH = 20;      // Track last 20 trades
+export const MIN_RISK_LEVEL = 0.2;
+export const MAX_RISK_LEVEL = 0.8;
+export const RISK_ADJUSTMENT_RATE = 0.05;

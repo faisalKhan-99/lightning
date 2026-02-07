@@ -82,11 +82,16 @@ export class HomeAgent extends BaseAgent {
         source: 'llm',
       });
     } else if (balanceAfterConsumption < HOME_TARGET_BUFFER) {
-      // Fallback: if balance below target buffer, place buy orders
+      // Fallback: if balance below target buffer, place buy orders with adaptive premium
       const deficit = HOME_TARGET_BUFFER - balanceAfterConsumption;
       const buyAmount = Math.min(deficit, consumption * 2); // don't over-buy
       const marketPrice = marketplace.pricing.getPrice();
-      const buyPrice = marketPrice * 1.05;
+      // Adaptive buy premium based on risk level
+      const basePremium = 1.05;
+      const adaptivePremium = basePremium + (0.5 - this.memory.riskLevel) * 0.05;
+      // riskLevel 0.2 -> 1.065 (conservative, pay more to ensure supply)
+      // riskLevel 0.8 -> 1.035 (aggressive, try to get better price)
+      const buyPrice = marketPrice * adaptivePremium;
 
       marketplace.orderbook.addOrder({
         agentId: this.id,
@@ -101,6 +106,8 @@ export class HomeAgent extends BaseAgent {
         amount: buyAmount,
         price: buyPrice,
         deficit,
+        premium: adaptivePremium,
+        riskLevel: this.memory.riskLevel,
         source: 'fallback',
       });
     }
@@ -118,6 +125,7 @@ export class HomeAgent extends BaseAgent {
       strategy: this.strategy,
       reasoning: this.reasoning,
       consumption: this.lastConsumption,
+      memory: this.memory,
     };
   }
 }

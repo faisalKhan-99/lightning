@@ -1,3 +1,23 @@
+export interface PerformanceMemory {
+  // Cumulative metrics
+  totalProfit: number;           // SOL profit/loss from trades
+  tradesWon: number;             // Trades where we got favorable price
+  tradesLost: number;            // Trades where we got unfavorable price
+
+  // Rolling metrics (updated each tick)
+  recentProfits: number[];       // Last N trade profits (for trend)
+  avgBuyPrice: number;           // Average price paid for energy
+  avgSellPrice: number;          // Average price received for energy
+
+  // Prediction tracking
+  predictedPrices: number[];     // What we expected
+  actualPrices: number[];        // What happened
+
+  // Adaptive parameters (0-1 scale)
+  riskLevel: number;             // Higher = more aggressive
+  llmTrustScore: number;         // Higher = trust LLM more over fallback
+}
+
 export interface Order {
   id: string;
   agentId: string;
@@ -34,6 +54,7 @@ export interface AgentState {
   consumption?: number;
   storageLevel?: number;
   storageCapacity?: number;
+  memory?: PerformanceMemory;    // Add for dashboard display
 }
 
 export interface MarketState {

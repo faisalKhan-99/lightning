@@ -82,8 +82,14 @@ export class BatteryAgent extends BaseAgent {
       this.activity = `Holding ${this.storageLevel.toFixed(2)} kWh (AI decision)`;
       logger.agentAction(this.id, 'HOLD', { storage: this.storageLevel, price: currentPrice, avg: movingAvg, source: 'llm' });
     } else {
-      // Fallback: existing moving average strategy
-      if (currentPrice < movingAvg * BATTERY_BUY_THRESHOLD && this.storageLevel < BATTERY_MAX_CAPACITY) {
+      // Fallback: existing moving average strategy with adaptive thresholds
+      // Adaptive thresholds based on risk level
+      const buyThreshold = BATTERY_BUY_THRESHOLD - (this.memory.riskLevel - 0.5) * 0.1;
+      const sellThreshold = BATTERY_SELL_THRESHOLD + (this.memory.riskLevel - 0.5) * 0.1;
+      // riskLevel 0.2 -> buy at 0.88, sell at 1.12 (conservative)
+      // riskLevel 0.8 -> buy at 0.82, sell at 1.18 (aggressive)
+
+      if (currentPrice < movingAvg * buyThreshold && this.storageLevel < BATTERY_MAX_CAPACITY) {
         // Buy opportunity
         const buyAmount = Math.min(5, BATTERY_MAX_CAPACITY - this.storageLevel);
         if (buyAmount > 0.01) {
@@ -99,10 +105,12 @@ export class BatteryAgent extends BaseAgent {
             amount: buyAmount,
             price: currentPrice * 1.02,
             priceVsAvg: (currentPrice / movingAvg).toFixed(3),
+            buyThreshold,
+            riskLevel: this.memory.riskLevel,
             source: 'fallback',
           });
         }
-      } else if (currentPrice > movingAvg * BATTERY_SELL_THRESHOLD && this.storageLevel > 1) {
+      } else if (currentPrice > movingAvg * sellThreshold && this.storageLevel > 1) {
         // Sell opportunity
         const sellAmount = Math.min(5, this.storageLevel);
         if (sellAmount > 0.01) {
@@ -118,6 +126,8 @@ export class BatteryAgent extends BaseAgent {
             amount: sellAmount,
             price: currentPrice * 0.98,
             priceVsAvg: (currentPrice / movingAvg).toFixed(3),
+            sellThreshold,
+            riskLevel: this.memory.riskLevel,
             source: 'fallback',
           });
         }
@@ -127,6 +137,7 @@ export class BatteryAgent extends BaseAgent {
           storage: this.storageLevel,
           price: currentPrice,
           avg: movingAvg,
+          riskLevel: this.memory.riskLevel,
           source: 'fallback',
         });
       }
@@ -146,6 +157,7 @@ export class BatteryAgent extends BaseAgent {
       reasoning: this.reasoning,
       storageLevel: this.storageLevel,
       storageCapacity: BATTERY_MAX_CAPACITY,
+      memory: this.memory,
     };
   }
 }

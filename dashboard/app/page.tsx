@@ -15,16 +15,19 @@ export default function Home() {
 
   if (!state) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-yellow-400 mb-4">SolGrid</h1>
-          <p className="text-gray-400 mb-2">Connecting to engine...</p>
-          <p className="text-gray-600 text-sm">
+      <div className="min-h-screen flex items-center justify-center bg-surface-0 bg-grid-overlay">
+        <div className="card-cyber p-8 text-center max-w-sm">
+          <div className="flex justify-center mb-5">
+            <div className="w-12 h-12 rounded-full border-2 border-solar border-t-transparent animate-spin" />
+          </div>
+          <h1 className="font-mono text-2xl font-bold text-solar mb-3">SolGrid</h1>
+          <p className="text-txt-secondary mb-2 text-sm">Connecting to engine...</p>
+          <p className="text-txt-tertiary text-xs">
             Make sure the engine is running on ws://localhost:8080
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="text-yellow-400 text-xs">Waiting for connection</span>
+            <span className="w-2 h-2 rounded-full bg-solar animate-pulse-slow ring-1 ring-solar/50" />
+            <span className="text-solar text-xs font-mono">Waiting for connection</span>
           </div>
         </div>
       </div>
@@ -32,7 +35,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950">
+    <div className="min-h-screen flex flex-col bg-surface-0 bg-grid-overlay">
       {/* Top metrics bar */}
       <MetricsBar state={state} connected={connected} />
 
@@ -57,7 +60,7 @@ export default function Home() {
             supply={state.supplyDemand.supply}
             demand={state.supplyDemand.demand}
           />
-          <EnergyFlow agents={state.agents} recentTrades={state.recentTrades} />
+          <EnergyFlow agents={state.agents} recentTrades={state.recentTrades} simulatedHour={state.simulatedHour} />
         </div>
 
         {/* Right column: Trade feed */}

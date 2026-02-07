@@ -20,6 +20,9 @@ export class Marketplace {
   public totalTraded: number = 0;
   public totalTransactions: number = 0;
 
+  // Callback for trade notifications
+  public onTradeExecuted?: (trade: Trade) => void;
+
   constructor() {
     this.orderbook = new OrderBook();
     this.pricing = new PricingEngine();
@@ -126,6 +129,11 @@ export class Marketplace {
           pricePerUnit: trade.pricePerUnit,
           totalPrice: trade.totalPrice,
         });
+
+        // Notify agents of trade execution
+        if (this.onTradeExecuted) {
+          this.onTradeExecuted(trade);
+        }
 
         if (buyOrder.amount - buyOrder.filled <= 0) break;
       }

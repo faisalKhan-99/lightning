@@ -49,9 +49,14 @@ export class SolarAgent extends BaseAgent {
           this.activity = `Produced ${production.toFixed(2)} kWh, holding (AI decision)`;
           logger.agentAction(this.id, 'MINT+HOLD', { production, source: 'llm' });
         } else {
-          // Sell: use LLM decision or fallback to 95%
+          // Sell: use LLM decision or fallback with adaptive multiplier
           const marketPrice = marketplace.pricing.getPrice();
-          const priceMultiplier = decision?.priceMultiplier ?? 0.95;
+          // Adaptive price multiplier based on risk level
+          const baseMultiplier = 0.95;
+          const adaptiveMultiplier = baseMultiplier + (this.memory.riskLevel - 0.5) * 0.1;
+          // riskLevel 0.2 -> 0.92 (more conservative, lower price)
+          // riskLevel 0.8 -> 0.98 (more aggressive, higher price)
+          const priceMultiplier = decision?.priceMultiplier ?? adaptiveMultiplier;
           const sellAmount = decision ? Math.min(decision.amount, production) : production;
           const sellPrice = marketPrice * priceMultiplier;
 
@@ -70,6 +75,7 @@ export class SolarAgent extends BaseAgent {
               sellAmount,
               sellPrice,
               priceMultiplier,
+              riskLevel: this.memory.riskLevel,
               source: decision ? 'llm' : 'fallback',
             });
           } else {
@@ -99,6 +105,7 @@ export class SolarAgent extends BaseAgent {
       strategy: this.strategy,
       reasoning: this.reasoning,
       production: this.lastProduction,
+      memory: this.memory,
     };
   }
 }
