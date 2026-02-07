@@ -2,6 +2,7 @@
 
 import { useWebSocket } from '../hooks/useWebSocket';
 import MetricsBar from '../components/MetricsBar';
+import DayCycle from '../components/DayCycle';
 import PriceChart from '../components/PriceChart';
 import AgentCard from '../components/AgentCard';
 import TradeFeed from '../components/TradeFeed';
@@ -34,6 +35,11 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-gray-950">
       {/* Top metrics bar */}
       <MetricsBar state={state} connected={connected} />
+
+      {/* Day/Night cycle indicator */}
+      <div className="px-4 pt-4">
+        <DayCycle hour={state.simulatedHour} />
+      </div>
 
       {/* Main content */}
       <div className="flex-1 grid grid-cols-12 gap-4 p-4">
