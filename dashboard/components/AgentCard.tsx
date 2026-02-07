@@ -82,6 +82,14 @@ export default function AgentCard({ agent }: Props) {
         <div className="mt-1">
           <p className={`text-[11px] ${color.text}`}>{agent.activity}</p>
         </div>
+
+        {agent.reasoning && (
+          <div className="mt-1">
+            <p className="text-[10px] text-gray-400 italic">
+              <span className="text-cyan-500 font-medium">AI:</span> {agent.reasoning}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

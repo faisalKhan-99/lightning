@@ -5,6 +5,8 @@ import { Marketplace } from '../market/marketplace.js';
 import { mintTokens } from '../chain/token.js';
 import { getSolarOutput } from '../simulation/meter.js';
 import { AgentState } from '../market/types.js';
+import { AgentDecision } from './llm.js';
+import { logger } from '../utils/index.js';
 
 export class SolarAgent extends BaseAgent {
   private mintAuthority: Keypair;
@@ -24,9 +26,10 @@ export class SolarAgent extends BaseAgent {
     this.strategy = 'Produce energy during daylight, sell at 95% market price';
   }
 
-  async tick(hour: number, marketplace: Marketplace): Promise<void> {
+  async tick(hour: number, marketplace: Marketplace, decision?: AgentDecision): Promise<void> {
     const production = getSolarOutput(hour);
     this.lastProduction = production;
+    this.reasoning = decision?.reasoning || '';
 
     if (production > 0.01) {
       // Mint tokens for production
@@ -40,25 +43,47 @@ export class SolarAgent extends BaseAgent {
         this.totalMinted += production;
         this.activity = `Producing ${production.toFixed(2)} kWh`;
 
-        // Post sell order at 95% of market price
-        const marketPrice = marketplace.pricing.getPrice();
-        const sellPrice = marketPrice * 0.95;
+        // Determine sell behavior based on LLM decision or fallback
+        if (decision && decision.action === 'hold') {
+          // LLM says hold - mint but don't post sell order
+          this.activity = `Produced ${production.toFixed(2)} kWh, holding (AI decision)`;
+          logger.agentAction(this.id, 'MINT+HOLD', { production, source: 'llm' });
+        } else {
+          // Sell: use LLM decision or fallback to 95%
+          const marketPrice = marketplace.pricing.getPrice();
+          const priceMultiplier = decision?.priceMultiplier ?? 0.95;
+          const sellAmount = decision ? Math.min(decision.amount, production) : production;
+          const sellPrice = marketPrice * priceMultiplier;
 
-        marketplace.orderbook.addOrder({
-          agentId: this.id,
-          side: 'sell',
-          amount: production,
-          pricePerUnit: sellPrice,
-          timestamp: Date.now(),
-        });
+          if (sellAmount > 0.01) {
+            marketplace.orderbook.addOrder({
+              agentId: this.id,
+              side: 'sell',
+              amount: sellAmount,
+              pricePerUnit: sellPrice,
+              timestamp: Date.now(),
+            });
 
-        this.activity = `Produced ${production.toFixed(2)} kWh, selling @ ${sellPrice.toFixed(4)}`;
+            this.activity = `Produced ${production.toFixed(2)} kWh, selling ${sellAmount.toFixed(2)} @ ${sellPrice.toFixed(4)}`;
+            logger.agentAction(this.id, 'MINT+SELL', {
+              production,
+              sellAmount,
+              sellPrice,
+              priceMultiplier,
+              source: decision ? 'llm' : 'fallback',
+            });
+          } else {
+            this.activity = `Produced ${production.toFixed(2)} kWh, holding`;
+            logger.agentAction(this.id, 'MINT+HOLD', { production, source: 'fallback' });
+          }
+        }
       } catch (err) {
         this.activity = `Mint error: ${err}`;
-        console.error(`Solar mint error: ${err}`);
+        logger.error('SOLAR', `Mint error: ${err}`);
       }
     } else {
       this.activity = 'No sunlight - idle';
+      logger.debug('SOLAR', 'No production (nighttime)', { hour });
     }
   }
 
@@ -72,6 +97,7 @@ export class SolarAgent extends BaseAgent {
       solBalance,
       activity: this.activity,
       strategy: this.strategy,
+      reasoning: this.reasoning,
       production: this.lastProduction,
     };
   }

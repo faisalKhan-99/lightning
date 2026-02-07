@@ -29,6 +29,7 @@ export interface AgentState {
   solBalance: number;
   activity: string;
   strategy: string;
+  reasoning?: string;
   production?: number;
   consumption?: number;
   storageLevel?: number;

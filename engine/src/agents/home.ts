@@ -6,6 +6,8 @@ import { burnTokens } from '../chain/token.js';
 import { getHomeConsumption } from '../simulation/meter.js';
 import { HOME_TARGET_BUFFER } from '../config.js';
 import { AgentState } from '../market/types.js';
+import { AgentDecision } from './llm.js';
+import { logger } from '../utils/index.js';
 
 export class HomeAgent extends BaseAgent {
   private mint: PublicKey;
@@ -18,19 +20,21 @@ export class HomeAgent extends BaseAgent {
     this.strategy = `Consume energy, maintain ${HOME_TARGET_BUFFER} kWh buffer, buy at 105% market`;
   }
 
-  async tick(hour: number, marketplace: Marketplace, currentBalance: number): Promise<void> {
+  async tick(hour: number, marketplace: Marketplace, currentBalance: number, decision?: AgentDecision): Promise<void> {
     const consumption = getHomeConsumption(hour);
     this.lastConsumption = consumption;
+    this.reasoning = decision?.reasoning || '';
 
-    // Burn tokens for consumption
+    // Burn tokens for consumption (always happens, non-negotiable)
     if (consumption > 0.01 && currentBalance >= consumption) {
       try {
         await burnTokens(this.keypair, this.mint, this.tokenAccountAddress, consumption);
         this.totalBurned += consumption;
         this.activity = `Consuming ${consumption.toFixed(2)} kWh`;
+        logger.agentAction(this.id, 'CONSUME', { consumption, balance: currentBalance });
       } catch (err) {
         this.activity = `Burn error: ${err}`;
-        console.error(`Home burn error: ${err}`);
+        logger.error('HOME', `Burn error: ${err}`);
       }
     } else if (currentBalance < consumption) {
       // Not enough balance, consume what we have
@@ -39,17 +43,46 @@ export class HomeAgent extends BaseAgent {
           await burnTokens(this.keypair, this.mint, this.tokenAccountAddress, currentBalance);
           this.totalBurned += currentBalance;
           this.activity = `Low supply! Consumed only ${currentBalance.toFixed(2)}/${consumption.toFixed(2)} kWh`;
+          logger.warn('HOME', 'Insufficient energy', { needed: consumption, available: currentBalance });
         } catch (err) {
           this.activity = `Burn error: ${err}`;
+          logger.error('HOME', `Burn error: ${err}`);
         }
       } else {
         this.activity = 'No energy available!';
+        logger.warn('HOME', 'No energy available', { needed: consumption, balance: currentBalance });
       }
     }
 
-    // If balance below target buffer, place buy orders
+    // Determine buy behavior based on LLM decision or fallback
     const balanceAfterConsumption = Math.max(0, currentBalance - consumption);
-    if (balanceAfterConsumption < HOME_TARGET_BUFFER) {
+
+    if (decision && decision.action === 'hold') {
+      // LLM says hold - skip buying this tick
+      this.activity += ' | Holding (AI decision)';
+      logger.agentAction(this.id, 'HOLD', { balanceAfter: balanceAfterConsumption, source: 'llm' });
+    } else if (decision && decision.action === 'buy' && decision.amount > 0.01) {
+      // LLM-driven buy
+      const marketPrice = marketplace.pricing.getPrice();
+      const buyPrice = marketPrice * decision.priceMultiplier;
+
+      marketplace.orderbook.addOrder({
+        agentId: this.id,
+        side: 'buy',
+        amount: decision.amount,
+        pricePerUnit: buyPrice,
+        timestamp: Date.now(),
+      });
+
+      this.activity += ` | Buying ${decision.amount.toFixed(2)} kWh @ ${buyPrice.toFixed(4)} (AI)`;
+      logger.agentAction(this.id, 'BUY', {
+        amount: decision.amount,
+        price: buyPrice,
+        priceMultiplier: decision.priceMultiplier,
+        source: 'llm',
+      });
+    } else if (balanceAfterConsumption < HOME_TARGET_BUFFER) {
+      // Fallback: if balance below target buffer, place buy orders
       const deficit = HOME_TARGET_BUFFER - balanceAfterConsumption;
       const buyAmount = Math.min(deficit, consumption * 2); // don't over-buy
       const marketPrice = marketplace.pricing.getPrice();
@@ -64,6 +97,12 @@ export class HomeAgent extends BaseAgent {
       });
 
       this.activity += ` | Buying ${buyAmount.toFixed(2)} kWh @ ${buyPrice.toFixed(4)}`;
+      logger.agentAction(this.id, 'BUY', {
+        amount: buyAmount,
+        price: buyPrice,
+        deficit,
+        source: 'fallback',
+      });
     }
   }
 
@@ -77,6 +116,7 @@ export class HomeAgent extends BaseAgent {
       solBalance,
       activity: this.activity,
       strategy: this.strategy,
+      reasoning: this.reasoning,
       consumption: this.lastConsumption,
     };
   }

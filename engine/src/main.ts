@@ -6,10 +6,13 @@ import { HomeAgent } from './agents/home.js';
 import { BatteryAgent } from './agents/battery.js';
 import { startWebSocketServer, broadcastState } from './server.js';
 import { MarketState } from './market/types.js';
-import { TICK_INTERVAL_MS } from './config.js';
+import { TICK_INTERVAL_MS, LLM_ENABLED, LLM_CALL_INTERVAL } from './config.js';
+import { getAgentDecisions, AgentDecision } from './agents/llm.js';
+import { logger } from './utils/index.js';
 
 async function main() {
-  console.log('=== SolGrid: Autonomous Energy Market ===\n');
+  logger.info('SYSTEM', '=== SolGrid: Autonomous Energy Market ===');
+  logger.info('SYSTEM', `Log file: ${logger.getLogFilePath()}`);
 
   // Start WebSocket server
   startWebSocketServer();
@@ -54,41 +57,85 @@ async function main() {
 
   // Tick loop
   const tickLoop = async () => {
+    const tickStart = Date.now();
+
     try {
       // 1. Advance clock
       clock.tick();
       const hour = clock.getHour();
       const timeStr = clock.getFormattedTime();
 
-      console.log(`\n--- Tick ${clock.getTickCount()} | ${timeStr} (Day ${clock.getDayNumber()}) ---`);
+      logger.tick(clock.getTickCount(), timeStr, clock.getDayNumber());
 
       // Clear stale orders from previous tick
       marketplace.clearOrders();
 
+      // Get balances for LLM context
+      const homeBalance = await homeAgent.getTokenBalance();
+      const batteryBalance = await batteryAgent.getTokenBalance();
+
+      // LLM decisions - smart triggering with caching and backoff
+      let solarDecision: AgentDecision | null = null;
+      let homeDecision: AgentDecision | null = null;
+      let batteryDecision: AgentDecision | null = null;
+
+      if (LLM_ENABLED) {
+        const llmStart = Date.now();
+
+        const decisions = await getAgentDecisions(
+          marketplace,
+          clock,
+          priceHistory,
+          solarAgent,
+          homeAgent,
+          batteryAgent,
+          homeBalance,
+          batteryBalance,
+          LLM_CALL_INTERVAL
+        );
+
+        solarDecision = decisions.solar;
+        homeDecision = decisions.home;
+        batteryDecision = decisions.battery;
+
+        if (decisions.triggered) {
+          logger.performance('LLM decisions', Date.now() - llmStart, {
+            reason: decisions.reason,
+            solar: solarDecision?.action ?? 'fallback',
+            home: homeDecision?.action ?? 'fallback',
+            battery: batteryDecision?.action ?? 'fallback',
+          });
+        }
+      }
+
       // 2. Solar agent: produce + sell
-      await solarAgent.tick(hour, marketplace);
+      await solarAgent.tick(hour, marketplace, solarDecision ?? undefined);
 
       // 3. Home agent: consume + buy
-      const homeBalance = await homeAgent.getTokenBalance();
-      await homeAgent.tick(hour, marketplace, homeBalance);
+      await homeAgent.tick(hour, marketplace, homeBalance, homeDecision ?? undefined);
 
       // 4. Battery agent: evaluate + trade
-      const batteryBalance = await batteryAgent.getTokenBalance();
-      await batteryAgent.tick(marketplace, batteryBalance);
+      await batteryAgent.tick(marketplace, batteryBalance, batteryDecision ?? undefined);
 
-      // 5. Match orders + execute on-chain
+      // 5. Capture supply/demand BEFORE matching (for price discovery)
+      const supplyBeforeMatch = marketplace.orderbook.getTotalSupply();
+      const demandBeforeMatch = marketplace.orderbook.getTotalDemand();
+
+      // 6. Match orders + execute on-chain
       await marketplace.matchOrders(timeStr);
 
-      // 6. Recalculate price
-      const supply = marketplace.orderbook.getTotalSupply();
-      const demand = marketplace.orderbook.getTotalDemand();
-      const price = marketplace.pricing.recalculate(supply, demand);
+      // 7. Recalculate price based on pre-match supply/demand
+      const price = marketplace.pricing.recalculate(supplyBeforeMatch, demandBeforeMatch);
 
-      // 7. Record price history
+      // Track remaining unfilled orders
+      const supplyAfterMatch = marketplace.orderbook.getTotalSupply();
+      const demandAfterMatch = marketplace.orderbook.getTotalDemand();
+
+      // 8. Record price history
       priceHistory.push({ time: timeStr, price, simHour: hour });
       if (priceHistory.length > 500) priceHistory.splice(0, priceHistory.length - 500);
 
-      // 8. Get balances for state
+      // 9. Get balances for state
       const [solarBal, homeBal, batteryBal, solarSol, homeSol, batterySol] = await Promise.all([
         solarAgent.getTokenBalance(),
         homeAgent.getTokenBalance(),
@@ -98,7 +145,7 @@ async function main() {
         batteryAgent.getSolBalance(),
       ]);
 
-      // 9. Build market state
+      // 10. Build market state
       const state: MarketState = {
         currentPrice: price,
         priceHistory: [...priceHistory],
@@ -109,7 +156,7 @@ async function main() {
         ],
         recentTrades: marketplace.getRecentTrades(),
         openOrders: marketplace.orderbook.getAllOpenOrders(),
-        supplyDemand: { supply, demand },
+        supplyDemand: { supply: supplyBeforeMatch, demand: demandBeforeMatch },
         metrics: {
           totalMinted: solarAgent.totalMinted,
           totalBurned: homeAgent.totalBurned,
@@ -123,11 +170,22 @@ async function main() {
         systemStatus: 'running',
       };
 
-      // 10. Broadcast to dashboard
+      // 11. Broadcast to dashboard
       broadcastState(state);
 
+      // Log tick completion and performance
+      logger.marketState(clock.getTickCount(), price, supplyBeforeMatch, demandBeforeMatch);
+      logger.debug('MARKET', `Post-match remaining`, {
+        unfilledSupply: supplyAfterMatch,
+        unfilledDemand: demandAfterMatch,
+      });
+      logger.performance('Tick total', Date.now() - tickStart, {
+        tick: clock.getTickCount(),
+        trades: marketplace.getRecentTrades().length,
+      });
+
     } catch (err) {
-      console.error('Tick error:', err);
+      logger.error('TICK', `Tick error: ${err}`);
     }
   };
 

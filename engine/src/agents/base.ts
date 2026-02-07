@@ -13,6 +13,7 @@ export abstract class BaseAgent {
   public tokenAccountAddress: PublicKey;
   public activity: string = 'Idle';
   public strategy: string = '';
+  public reasoning: string = '';
 
   constructor(
     id: string,

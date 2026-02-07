@@ -3,6 +3,7 @@ import { PricingEngine } from './pricing.js';
 import { Trade } from './types.js';
 import { transferTokens, getTokenBalance } from '../chain/token.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
+import { logger } from '../utils/index.js';
 
 let nextTradeId = 1;
 
@@ -86,6 +87,10 @@ export class Marketplace {
             fillAmount
           );
         } catch (err) {
+          logger.error('TRADE', `Transfer failed: ${sellOrder.agentId} -> ${buyOrder.agentId}`, {
+            amount: fillAmount,
+            error: String(err),
+          });
           // Mark seller as having 0 balance to avoid repeated failures
           sellerBalances.set(sellOrder.agentId, 0);
           continue;
@@ -114,9 +119,13 @@ export class Marketplace {
         this.totalTraded += fillAmount;
         this.totalTransactions++;
 
-        console.log(
-          `  Trade: ${trade.sellerId} -> ${trade.buyerId} | ${fillAmount.toFixed(2)} kWh @ ${tradePrice.toFixed(4)} SOL | tx: ${txSignature.slice(0, 16)}...`
-        );
+        logger.trade({
+          buyerId: trade.buyerId,
+          sellerId: trade.sellerId,
+          amount: trade.amount,
+          pricePerUnit: trade.pricePerUnit,
+          totalPrice: trade.totalPrice,
+        });
 
         if (buyOrder.amount - buyOrder.filled <= 0) break;
       }
