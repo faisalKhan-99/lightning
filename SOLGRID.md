@@ -38,6 +38,9 @@ A decentralized energy trading simulation featuring autonomous AI agents that mi
 | Rate Limiting & Caching | Complete |
 | Logging System | Complete |
 | Colosseum Heartbeat | Complete |
+| Energy Flow Animation | Complete |
+| Day/Night Cycle UI | Complete |
+| Nighttime Solar Flow Fix | Complete |
 
 **Last Updated:** 2026-02-07
 
@@ -154,21 +157,33 @@ hackathon/
 │           ├── clock.ts        # Simulated time system
 │           └── meter.ts        # Energy production/consumption curves
 │
-└── dashboard/              # Frontend (Next.js 14 + Tailwind)
+└── dashboard/              # Frontend (Next.js 14 + Tailwind + Remotion)
     ├── package.json
+    ├── tailwind.config.ts
+    ├── next.config.mjs
     ├── app/
+    │   ├── globals.css
     │   ├── layout.tsx
     │   └── page.tsx
     ├── components/
-    │   ├── AgentCard.tsx       # Agent status display
-    │   ├── MarketDashboard.tsx # Main dashboard
-    │   ├── OrderBook.tsx       # Live orders
-    │   ├── PriceChart.tsx      # Price history chart
-    │   └── TradeHistory.tsx    # Recent trades
+    │   ├── AgentCard.tsx           # Agent status + AI reasoning display
+    │   ├── DayCycle.tsx            # Day/night cycle sun position indicator
+    │   ├── EnergyFlow/            # Animated energy flow visualization
+    │   │   ├── index.tsx          # Entry point, accepts agents/trades/hour
+    │   │   ├── EnergyFlowPlayer.tsx # Remotion Player wrapper
+    │   │   ├── EnergyFlowComposition.tsx # Remotion composition
+    │   │   ├── FlowPath.tsx       # Animated bezier flow paths
+    │   │   ├── AgentNode.tsx      # Agent node icons (solar/home/battery)
+    │   │   └── flowUtils.ts       # Flow calculations, night-gated solar
+    │   ├── MetricsBar.tsx         # Top bar: price, time, connection status
+    │   ├── PriceChart.tsx         # Price history line chart (Recharts)
+    │   ├── SupplyDemand.tsx       # Supply/demand bar chart
+    │   ├── SystemStatus.tsx       # Bottom system health indicator
+    │   └── TradeFeed.tsx          # Recent trades with Solana tx links
     ├── hooks/
-    │   └── useMarketData.ts    # WebSocket hook
+    │   └── useWebSocket.ts        # WebSocket hook with auto-reconnect
     └── lib/
-        └── types.ts            # Shared TypeScript types
+        └── types.ts               # Shared TypeScript types
 ```
 
 ---
@@ -204,7 +219,7 @@ Every 5 seconds:
 | Parameter | Value | Description |
 |-----------|-------|-------------|
 | `TICK_INTERVAL_MS` | 5000 | Real-time tick interval |
-| `SIM_SPEED` | 60 | 1 real minute = 1 sim hour |
+| `SIM_SPEED` | 720 | 1 tick = 1 sim hour (24 ticks = 1 day) |
 | `BASE_PRICE` | 0.10 | Base energy price (SOL/kWh) |
 | `MIN_PRICE` | 0.02 | Price floor |
 | `MAX_PRICE` | 0.50 | Price ceiling |
@@ -216,12 +231,17 @@ Every 5 seconds:
 | `BATTERY_BUY_THRESHOLD` | 0.85 | Buy when price < avg * this |
 | `BATTERY_SELL_THRESHOLD` | 1.15 | Sell when price > avg * this |
 | `LLM_ENABLED` | auto | True if `OPENAI_API_KEY` is set |
-| `LLM_CALL_INTERVAL` | 36 | Scheduled LLM interval (36 ticks = 3 sim hours) |
-| `LLM_BACKOFF_TICKS` | 60 | After failure, wait N ticks before retry |
+| `LLM_CALL_INTERVAL` | 3 | Scheduled LLM interval (3 ticks = 3 sim hours) |
+| `LLM_BACKOFF_TICKS` | 5 | After failure, wait N ticks before retry (5 hours) |
 | `LLM_PRICE_CHANGE_THRESHOLD` | 0.15 | Trigger LLM if price changes >15% |
-| `LLM_DECISION_CACHE_TICKS` | 72 | Reuse decision for up to N ticks |
+| `LLM_DECISION_CACHE_TICKS` | 6 | Reuse decision for up to N ticks (6 hours) |
 | `LLM_MAX_RPM` | 10 | Max requests per minute (env configurable) |
 | `LLM_REQUEST_THROTTLE_MS` | 500 | Delay between sequential requests |
+| `ADAPTIVE_UPDATE_INTERVAL` | 6 | Update strategy every 6 ticks (6 hours) |
+| `MEMORY_HISTORY_LENGTH` | 20 | Track last 20 trades for adaptation |
+| `MIN_RISK_LEVEL` | 0.2 | Minimum agent risk level |
+| `MAX_RISK_LEVEL` | 0.8 | Maximum agent risk level |
+| `RISK_ADJUSTMENT_RATE` | 0.05 | Risk level step per adjustment |
 | `COLOSSEUM_API_KEY` | env | Colosseum hackathon API key |
 | `COLOSSEUM_ENABLED` | auto | True if API key is set |
 | `HEARTBEAT_INTERVAL_MS` | 1800000 | Heartbeat sync interval (30 min) |
@@ -470,26 +490,32 @@ Structured logging with console output and file persistence.
 
 ### 8. Dashboard (`/dashboard`)
 
-**Framework:** Next.js 14 with App Router
+**Framework:** Next.js 14 with App Router, Tailwind CSS, Remotion (animations), Recharts
 
 **Features:**
-- Real-time WebSocket connection to engine
+- Real-time WebSocket connection to engine with auto-reconnect
+- Cyberpunk-themed UI with custom design system
+- Day/night cycle visualization with sun position indicator
+- Animated energy flow diagram (Remotion) showing solar→home, solar→battery, battery→home paths
+- Night-gated solar flows: solar paths go idle when `simulatedHour < 6 || > 18`
 - Live price chart (Recharts)
-- Agent status cards with balances, activity, strategy
-- AI reasoning display (when LLM is enabled)
-- Order book visualization
-- Recent trades history
-- Supply/demand metrics
+- Agent status cards with balances, activity, strategy, and AI reasoning
+- Recent trades feed with Solana explorer links
+- Supply/demand bar chart
 
 #### Key Components
 
 | Component | Purpose |
 |-----------|---------|
-| `MarketDashboard` | Main layout, WebSocket connection |
-| `PriceChart` | Historical price visualization |
-| `AgentCard` | Individual agent status + AI reasoning |
-| `OrderBook` | Current buy/sell orders |
-| `TradeHistory` | Recent executed trades |
+| `page.tsx` | Main layout, WebSocket state, component composition |
+| `MetricsBar` | Top bar with current price, simulated time, connection status |
+| `DayCycle` | Visual sun position indicator (daylight 6AM–6PM) |
+| `PriceChart` | Historical price line chart (Recharts, 100-tick window) |
+| `AgentCard` | Per-agent display: balances, production/consumption, AI reasoning |
+| `EnergyFlow/` | Animated bezier flow paths between solar, home, battery (Remotion) |
+| `SupplyDemand` | Bar chart of open buy/sell order volumes |
+| `TradeFeed` | Scrollable recent trades with amounts, prices, Solana tx signatures |
+| `SystemStatus` | Bottom bar with system health indicator |
 
 ---
 
@@ -601,18 +627,18 @@ interface AgentState {
 Optimized LLM integration to reduce API calls by ~90%:
 
 **Changes to `config.ts`:**
-- `LLM_CALL_INTERVAL`: 3 → 36 (every 3 sim hours instead of 15 sec)
-- Added `LLM_BACKOFF_TICKS`: 60 (wait after failures)
+- `LLM_CALL_INTERVAL`: 3 (every 3 ticks = 3 sim hours)
+- Added `LLM_BACKOFF_TICKS`: 5 (wait 5 hours after failures)
 - Added `LLM_PRICE_CHANGE_THRESHOLD`: 0.15 (trigger on 15% price change)
-- Added `LLM_DECISION_CACHE_TICKS`: 72 (cache valid for 6 sim hours)
+- Added `LLM_DECISION_CACHE_TICKS`: 6 (cache valid for 6 sim hours)
 
 **New Features in `agents/llm.ts`:**
 - **Smart Triggering**: Only call LLM when:
-  - Scheduled interval reached (every 36 ticks)
+  - Scheduled interval reached (every 3 ticks / 3 sim hours)
   - Price changed >15% since last decision
   - Hour transitioned to peak/off-peak period (6, 10, 16, 22)
 - **Decision Caching**: Reuse valid decisions if market conditions similar
-- **Backoff on Failure**: After 429 error, wait 60 ticks before retrying
+- **Backoff on Failure**: After 429 error, wait 5 ticks before retrying
 - **Rate Limiting**: Track RPM and enforce limits (default 10 RPM)
 - **Request Throttling**: 500ms delay between sequential requests (not parallel)
 - **Usage Tracking**: Track total calls, failures, estimated cost, current RPM
@@ -704,6 +730,48 @@ Added GPT-4o-mini as an advisory decision layer for all agents:
 3. Each agent receives structured decision: `{ action, amount, priceMultiplier, reasoning }`
 4. Agents use LLM decision when valid, otherwise fall back to coded strategy
 5. Reasoning string displayed on dashboard agent cards
+
+---
+
+### 2026-02-07: Dashboard UI Overhaul & Energy Flow
+
+Complete redesign of the dashboard with cyberpunk theme and animated energy flow:
+
+**New Components:**
+- `DayCycle.tsx` — Visual sun position indicator tracking simulated hour
+- `EnergyFlow/` — Animated energy flow diagram using Remotion:
+  - Bezier curve paths between Solar, Home, and Battery nodes
+  - Particle animation intensity driven by trade volume
+  - Night-gated solar flows (solar paths idle when hour < 6 or > 18)
+  - `flowUtils.ts` — Flow intensity calculations with `simulatedHour` gating
+  - `FlowPath.tsx` — Animated bezier paths with gradient particles
+  - `AgentNode.tsx` — SVG icons for solar panel, home, battery
+  - `EnergyFlowPlayer.tsx` — Remotion Player wrapper
+- `MetricsBar.tsx` — Top bar with price, time, connection status
+- `SupplyDemand.tsx` — Supply/demand bar chart
+- `SystemStatus.tsx` — Bottom system health bar
+- `TradeFeed.tsx` — Scrollable trade feed (replaced TradeHistory)
+
+**Modified Components:**
+- `AgentCard.tsx` — Redesigned with cyberpunk styling, AI reasoning display
+- `PriceChart.tsx` — Updated styling to match new theme
+- `page.tsx` — New grid layout with 3-column design
+
+**Design System:**
+- Custom Tailwind config with cyberpunk color palette (`solar`, `battery`, `home-blue`, `surface-*`, `txt-*`)
+- Custom CSS classes: `card-cyber`, `label-mono`, `bg-grid-overlay`
+- Remotion for smooth energy flow animations
+
+### 2026-02-07: Fix Stale Solar Trades at Night
+
+Fixed energy flow showing active solar→home and solar→battery paths during nighttime:
+
+**Root Cause:** `calculateFlowData()` aggregated trade volumes without time awareness — stale daytime solar trades persisted in the buffer and rendered as active flow at night.
+
+**Fix:**
+- `flowUtils.ts` — Added `simulatedHour` parameter to `calculateFlowData()`, zeroes solar flows when `hour < 6 || hour > 18`
+- `EnergyFlow/index.tsx` — Accepts and forwards `simulatedHour` prop
+- `page.tsx` — Passes `state.simulatedHour` to `<EnergyFlow>`
 
 ---
 
