@@ -6,19 +6,24 @@ A decentralized energy trading simulation featuring autonomous AI agents that mi
 
 ## System Summary
 
-**What it does:** Three AI agents autonomously trade energy in a simulated marketplace with real on-chain transactions.
+**What it does:** AI agents and human players autonomously trade energy in a simulated marketplace with real on-chain transactions.
 
 | Agent | Role | Strategy |
 |-------|------|----------|
-| Solar Panel | Produces & sells energy | Mint during daylight, sell at competitive prices |
-| Smart Home | Consumes & buys energy | Burn for consumption, maintain 20 kWh buffer |
-| Battery | Arbitrage trading | Buy low (<85% avg), sell high (>115% avg) |
+| Solar Panel (AI) | Produces & sells energy | Mint during daylight, sell at competitive prices |
+| Smart Home (AI) | Consumes & buys energy | Burn for consumption, maintain 20 kWh buffer |
+| Battery (AI) | Arbitrage trading | Buy low (<85% avg), sell high (>115% avg) |
+| User Agent | Player-controlled | Connect Phantom wallet, choose any role, compete with AI |
 
 **Key Features:**
 - Real SPL token minting, burning, and transfers on Solana devnet
 - GPT-4o-mini advisory decisions with smart triggering and fallback strategies
 - Dynamic pricing based on supply/demand
-- Live dashboard with WebSocket updates
+- **Phantom wallet integration** — users join the grid as solar, home, or battery
+- User agents compete in the same marketplace as AI agents with fair order matching
+- LLM market context includes user agent demand for informed AI decisions
+- Live dashboard with WebSocket updates, landing page with content sections
+- Animated energy flow diagram with dynamic user node positioning
 - Structured logging for performance tracing
 - 92% reduction in API calls via caching and rate limiting
 
@@ -41,8 +46,15 @@ A decentralized energy trading simulation featuring autonomous AI agents that mi
 | Energy Flow Animation | Complete |
 | Day/Night Cycle UI | Complete |
 | Nighttime Solar Flow Fix | Complete |
+| Landing Page & Content | Complete |
+| Phantom Wallet Integration | Complete |
+| User Agent System | Complete |
+| User Join/Leave via WebSocket | Complete |
+| User Node Positioning (Flow) | Complete |
+| Fair Order Matching (tie-break) | Complete |
+| LLM User Context Awareness | Complete |
 
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-02-09
 
 ### Hackathon Status
 
@@ -67,7 +79,7 @@ A decentralized energy trading simulation featuring autonomous AI agents that mi
 │  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐       │
 │  │   Solar     │     │    Home     │     │   Battery   │       │
 │  │   Agent     │     │   Agent     │     │   Agent     │       │
-│  │             │     │             │     │             │       │
+│  │  (AI)       │     │   (AI)      │     │   (AI)      │       │
 │  │ Produces    │     │ Consumes    │     │ Arbitrages  │       │
 │  │ & Sells     │     │ & Buys      │     │ Buy/Sell    │       │
 │  └──────┬──────┘     └──────┬──────┘     └──────┬──────┘       │
@@ -77,7 +89,13 @@ A decentralized energy trading simulation featuring autonomous AI agents that mi
 │         │    │       (GPT-4o-mini)          │   │               │
 │         │    │  Smart trigger + caching     │   │               │
 │         │    │  Rate limited (10 RPM)       │   │               │
+│         │    │  User-aware market context   │   │               │
 │         │    └──────────────────────────────┘   │               │
+│         │                   │                   │               │
+│  ┌──────┴──────┐     ┌──────┴──────┐     ┌──────┴──────┐       │
+│  │ User Solar  │     │ User Home   │     │ User Battery│       │
+│  │  (Phantom)  │     │  (Phantom)  │     │  (Phantom)  │       │
+│  └──────┬──────┘     └──────┬──────┘     └──────┬──────┘       │
 │         │                   │                   │               │
 │         └───────────────────┼───────────────────┘               │
 │                             ▼                                   │
@@ -136,6 +154,8 @@ hackathon/
 │       │   ├── solar.ts    # Solar producer agent
 │       │   ├── home.ts     # Home consumer agent
 │       │   ├── battery.ts  # Battery arbitrage agent
+│       │   ├── user.ts     # User-controlled agent (any role)
+│       │   ├── userManager.ts # User lifecycle management
 │       │   └── llm.ts      # LLM integration module
 │       ├── chain/
 │       │   ├── connection.ts   # Solana RPC connection
@@ -157,31 +177,44 @@ hackathon/
 │           ├── clock.ts        # Simulated time system
 │           └── meter.ts        # Energy production/consumption curves
 │
+├── content/                # Landing page content (markdown)
+│   ├── agents.md           # Agent explainer
+│   ├── blockchain.md       # Solana integration explainer
+│   ├── marketplace.md      # Marketplace mechanics explainer
+│   └── simulation.md       # Simulation mechanics explainer
+│
 └── dashboard/              # Frontend (Next.js 14 + Tailwind + Remotion)
     ├── package.json
     ├── tailwind.config.ts
     ├── next.config.mjs
     ├── app/
     │   ├── globals.css
-    │   ├── layout.tsx
-    │   └── page.tsx
+    │   ├── layout.tsx          # Root layout with WalletProvider
+    │   ├── page.tsx            # Landing page (Hero, sections, architecture)
+    │   ├── dashboard/page.tsx  # Live dashboard with trading UI
+    │   ├── agents/page.tsx     # Agents content page
+    │   ├── marketplace/page.tsx # Marketplace content page
+    │   ├── simulation/page.tsx # Simulation content page
+    │   └── blockchain/page.tsx # Blockchain content page
     ├── components/
     │   ├── AgentCard.tsx           # Agent status + AI reasoning display
     │   ├── DayCycle.tsx            # Day/night cycle sun position indicator
+    │   ├── JoinGrid.tsx           # Wallet connect + role selection UI
+    │   ├── WalletProvider.tsx     # Phantom wallet adapter wrapper
     │   ├── EnergyFlow/            # Animated energy flow visualization
     │   │   ├── index.tsx          # Entry point, accepts agents/trades/hour
     │   │   ├── EnergyFlowPlayer.tsx # Remotion Player wrapper
     │   │   ├── EnergyFlowComposition.tsx # Remotion composition
     │   │   ├── FlowPath.tsx       # Animated bezier flow paths
     │   │   ├── AgentNode.tsx      # Agent node icons (solar/home/battery)
-    │   │   └── flowUtils.ts       # Flow calculations, night-gated solar
+    │   │   └── flowUtils.ts       # Flow calculations, user-aware positioning
     │   ├── MetricsBar.tsx         # Top bar: price, time, connection status
     │   ├── PriceChart.tsx         # Price history line chart (Recharts)
     │   ├── SupplyDemand.tsx       # Supply/demand bar chart
     │   ├── SystemStatus.tsx       # Bottom system health indicator
     │   └── TradeFeed.tsx          # Recent trades with Solana tx links
     ├── hooks/
-    │   └── useWebSocket.ts        # WebSocket hook with auto-reconnect
+    │   └── useWebSocket.ts        # WebSocket hook with auto-reconnect + join/leave
     └── lib/
         └── types.ts               # Shared TypeScript types
 ```
@@ -205,13 +238,15 @@ The simulation engine runs a tick-based loop that:
 Every 5 seconds:
   1. Clock advances 1 hour
   2. Clear previous orders
-  3. (If LLM tick) Fetch 3 agent decisions in parallel
-  4. Solar agent: mint tokens based on hour, post sell orders
-  5. Home agent: burn tokens for consumption, post buy orders
-  6. Battery agent: evaluate arbitrage opportunities
-  7. Match orders → execute on-chain transfers
-  8. Recalculate market price based on supply/demand
-  9. Broadcast full state via WebSocket
+  3. Build user agent summary for LLM context
+  4. (If LLM tick) Fetch 3 agent decisions (user-aware context)
+  5. Solar agent: mint tokens based on hour, post sell orders
+  6. Home agent: burn tokens for consumption, post buy orders
+  7. Battery agent: evaluate arbitrage opportunities
+  8. User agents: tick based on role (solar/home/battery)
+  9. Match orders → execute on-chain transfers (fair tie-breaking)
+  10. Recalculate market price based on supply/demand
+  11. Broadcast full state via WebSocket (AI + user agents)
 ```
 
 #### Configuration (`config.ts`)
@@ -300,6 +335,27 @@ Consumption pattern: BASE * (1 + peakMultiplier) where peaks at 8 AM and 7 PM
 
 **LLM Override:** Can make buy/sell/hold decisions with custom amounts and prices
 
+#### User Agent (`agents/user.ts` + `agents/userManager.ts`)
+
+**Role:** Player-controlled agent — connects via Phantom wallet, picks any role.
+
+**How it works:**
+1. User connects Phantom wallet on the dashboard
+2. Selects a role: solar, home, or battery
+3. Engine creates a dedicated Solana keypair + token account for the user
+4. User agent ID: `user_${walletAddress.slice(0, 8)}`
+5. Agent participates in the same marketplace as AI agents each tick
+6. On disconnect, agent is unregistered and removed
+
+**User Strategies (fixed, no LLM):**
+- **Solar:** Mint during daylight, sell at 85% market price
+- **Home:** Consume per curve, buy at 105% market when below 20 kWh buffer
+- **Battery:** Buy below 85% moving avg, sell above 115% moving avg
+
+**Fair Matching:** The orderbook randomizes same-priced orders to prevent systematic AI-first bias. When a user and AI agent bid at the same price, each has ~50% chance of being matched first.
+
+**Energy Flow Positioning:** User nodes are positioned directly below their AI counterpart in the flow diagram (user solar below AI solar, etc.).
+
 ---
 
 ### 3. LLM Integration (`agents/llm.ts`)
@@ -359,12 +415,13 @@ Also maintains a 10-tick moving average for trend analysis.
 
 #### Order Matching
 
-Simple price-time priority matching:
+Price-priority matching with fair tie-breaking:
 1. Sort sells by price ascending (lowest first)
 2. Sort buys by price descending (highest first)
-3. Match when buy.price >= sell.price
-4. Execute on-chain token + SOL transfers
-5. Record trade
+3. **Same-price tie-breaking:** Randomized (prevents systematic AI-first bias)
+4. Match when buy.price >= sell.price
+5. Execute on-chain token transfers
+6. Record trade with tx signature
 
 ---
 
@@ -493,11 +550,14 @@ Structured logging with console output and file persistence.
 **Framework:** Next.js 14 with App Router, Tailwind CSS, Remotion (animations), Recharts
 
 **Features:**
+- **Landing page** with hero, content sections (agents, marketplace, simulation, blockchain), architecture diagram, tech stack
+- **Phantom wallet integration** — connect wallet, select role, join/leave grid
 - Real-time WebSocket connection to engine with auto-reconnect
 - Cyberpunk-themed UI with custom design system
 - Day/night cycle visualization with sun position indicator
-- Animated energy flow diagram (Remotion) showing solar→home, solar→battery, battery→home paths
+- Animated energy flow diagram (Remotion) with dynamic user node positioning
 - Night-gated solar flows: solar paths go idle when `simulatedHour < 6 || > 18`
+- Home agent flows enforced as inbound-only (never shown as seller)
 - Live price chart (Recharts)
 - Agent status cards with balances, activity, strategy, and AI reasoning
 - Recent trades feed with Solana explorer links
@@ -507,12 +567,15 @@ Structured logging with console output and file persistence.
 
 | Component | Purpose |
 |-----------|---------|
-| `page.tsx` | Main layout, WebSocket state, component composition |
+| `page.tsx` | Landing page with Hero, SectionPreviews, ArchitectureDiagram, TechStack |
+| `dashboard/page.tsx` | Live trading dashboard with WebSocket state |
+| `WalletProvider` | Phantom wallet adapter (devnet) wrapping the app |
+| `JoinGrid` | Wallet connect + role selection (solar/home/battery) + join button |
 | `MetricsBar` | Top bar with current price, simulated time, connection status |
 | `DayCycle` | Visual sun position indicator (daylight 6AM–6PM) |
 | `PriceChart` | Historical price line chart (Recharts, 100-tick window) |
 | `AgentCard` | Per-agent display: balances, production/consumption, AI reasoning |
-| `EnergyFlow/` | Animated bezier flow paths between solar, home, battery (Remotion) |
+| `EnergyFlow/` | Animated bezier flow paths with user node positioning below AI counterparts |
 | `SupplyDemand` | Bar chart of open buy/sell order volumes |
 | `TradeFeed` | Scrollable recent trades with amounts, prices, Solana tx signatures |
 | `SystemStatus` | Bottom bar with system health indicator |
@@ -605,16 +668,19 @@ interface AgentState {
   id: string;
   name: string;
   type: 'solar' | 'home' | 'battery';
+  owner: 'ai' | 'user';
   walletAddress: string;
+  phantomWallet?: string;  // User agents only
   tokenBalance: number;
   solBalance: number;
   activity: string;
   strategy: string;
-  reasoning?: string;      // LLM explanation (when available)
+  reasoning?: string;      // LLM explanation (AI agents only)
   production?: number;     // Solar only
   consumption?: number;    // Home only
   storageLevel?: number;   // Battery only
   storageCapacity?: number;// Battery only
+  memory: AgentMemory;     // Adaptive risk/profit tracking
 }
 ```
 
@@ -772,6 +838,63 @@ Fixed energy flow showing active solar→home and solar→battery paths during n
 - `flowUtils.ts` — Added `simulatedHour` parameter to `calculateFlowData()`, zeroes solar flows when `hour < 6 || hour > 18`
 - `EnergyFlow/index.tsx` — Accepts and forwards `simulatedHour` prop
 - `page.tsx` — Passes `state.simulatedHour` to `<EnergyFlow>`
+
+---
+
+### 2026-02-08: Landing Page & Content Pages
+
+Added a landing page with scroll animations and content sections:
+
+**New Files:**
+- `dashboard/app/page.tsx` — Landing page with Hero, SectionPreviews, ArchitectureDiagram, TechStack, Footer
+- `dashboard/app/agents/page.tsx`, `marketplace/page.tsx`, `simulation/page.tsx`, `blockchain/page.tsx` — Content pages
+- `dashboard/components/landing/` — Landing page components (TopNav, Hero, SectionPreviews, etc.)
+- `content/agents.md`, `marketplace.md`, `simulation.md`, `blockchain.md` — Content source files
+
+---
+
+### 2026-02-09: Phantom Wallet Integration & User Agents
+
+Users can now join the grid as any agent role by connecting their Phantom wallet:
+
+**New Files:**
+- `engine/src/agents/user.ts` — User agent with solar/home/battery tick logic
+- `engine/src/agents/userManager.ts` — User lifecycle (create keypair, fund SOL, create token account)
+- `dashboard/components/JoinGrid.tsx` — Role selection UI with wallet connect
+- `dashboard/components/WalletProvider.tsx` — Phantom wallet adapter setup
+
+**Modified Files:**
+- `engine/src/server.ts` — WebSocket join/leave handlers, auto-remove on disconnect
+- `engine/src/main.ts` — User agent ticks integrated into simulation loop
+- `engine/src/market/marketplace.ts` — Register/unregister user agents
+- `dashboard/app/layout.tsx` — Wrapped in WalletProvider
+- `dashboard/hooks/useWebSocket.ts` — Join/leave state management
+- `dashboard/components/EnergyFlow/flowUtils.ts` — User node positioning below AI counterparts
+
+**WebSocket Protocol:**
+- `join`: `{ type: 'join', phantomWallet, role }` → `{ type: 'join_ack', success, agentId }`
+- `leave`: `{ type: 'leave', phantomWallet }` → `{ type: 'leave_ack', success }`
+
+---
+
+### 2026-02-09: Bug Fixes — Fair Matching & Flow Rendering
+
+**Order matching bias fix** (`engine/src/market/orderbook.ts`):
+- Same-priced orders now use random tie-breaking instead of insertion-order (which always favored AI agents)
+
+**LLM user awareness** (`engine/src/agents/llm.ts`, `engine/src/main.ts`):
+- Market context now includes "User agents in grid: home (demand: X.X kWh)" so the LLM can make informed decisions about battery sell timing
+
+**Home outflow fix** (`dashboard/components/EnergyFlow/flowUtils.ts`):
+- Home agents are never rendered as sellers in the energy flow diagram
+- Prevents stale trade data from showing incorrect outflow
+
+**User node positioning** (`dashboard/components/EnergyFlow/flowUtils.ts`):
+- User nodes positioned directly below their AI counterpart instead of generic bottom row
+- ViewBox height calculated dynamically based on user node depth
+
+**Activity string fix** (`engine/src/agents/user.ts`):
+- User home activity resets properly when balance is 0 (no longer accumulates across ticks)
 
 ---
 

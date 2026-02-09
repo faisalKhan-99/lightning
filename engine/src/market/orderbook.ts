@@ -15,10 +15,18 @@ export class OrderBook {
 
     if (order.side === 'sell') {
       this.sellOrders.push(fullOrder);
-      this.sellOrders.sort((a, b) => a.pricePerUnit - b.pricePerUnit);
+      this.sellOrders.sort((a, b) => {
+        const priceDiff = a.pricePerUnit - b.pricePerUnit;
+        if (Math.abs(priceDiff) > 0.0001) return priceDiff;
+        return Math.random() - 0.5;
+      });
     } else {
       this.buyOrders.push(fullOrder);
-      this.buyOrders.sort((a, b) => b.pricePerUnit - a.pricePerUnit);
+      this.buyOrders.sort((a, b) => {
+        const priceDiff = b.pricePerUnit - a.pricePerUnit;
+        if (Math.abs(priceDiff) > 0.0001) return priceDiff;
+        return Math.random() - 0.5;
+      });
     }
 
     return fullOrder;

@@ -44,7 +44,9 @@ export interface AgentState {
   id: string;
   name: string;
   type: 'solar' | 'home' | 'battery';
+  owner: 'ai' | 'user';
   walletAddress: string;
+  phantomWallet?: string;
   tokenBalance: number;
   solBalance: number;
   activity: string;
@@ -54,8 +56,42 @@ export interface AgentState {
   consumption?: number;
   storageLevel?: number;
   storageCapacity?: number;
-  memory?: PerformanceMemory;    // Add for dashboard display
+  memory?: PerformanceMemory;
 }
+
+// WebSocket message types (client → server)
+export interface WsJoinMessage {
+  type: 'join';
+  phantomWallet: string;
+  role: 'solar' | 'home' | 'battery';
+}
+
+export interface WsLeaveMessage {
+  type: 'leave';
+  phantomWallet: string;
+}
+
+export type WsClientMessage = WsJoinMessage | WsLeaveMessage;
+
+// WebSocket message types (server → client)
+export interface WsJoinAck {
+  type: 'join_ack';
+  success: boolean;
+  agentId?: string;
+  error?: string;
+}
+
+export interface WsLeaveAck {
+  type: 'leave_ack';
+  success: boolean;
+}
+
+export interface WsStateMessage {
+  type: 'state';
+  data: MarketState;
+}
+
+export type WsServerMessage = WsJoinAck | WsLeaveAck | WsStateMessage;
 
 export interface MarketState {
   currentPrice: number;

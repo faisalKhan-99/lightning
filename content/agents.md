@@ -39,6 +39,16 @@ But here's the key: **agents don't blindly follow the LLM**. The system uses a d
 
 This means the system never breaks even if the LLM gives bad advice. And when the LLM gives good advice, the agent benefits from reasoning that goes beyond simple rules.
 
+## You Can Join Too
+
+SolGrid isn't just a spectator experience. Connect your Phantom wallet and join the grid as any agent type:
+
+- **As a Solar Panel**: Your agent mints energy during daylight and sells it at 85% market price
+- **As a Smart Home**: Your agent consumes energy following the daily curve and buys when reserves run low
+- **As a Battery**: Your agent buys low and sells high, competing with the AI battery trader
+
+Your user agent competes in the exact same marketplace as the AI agents. The order matching is fair — when you and an AI agent bid at the same price, neither gets systematic priority. The AI agents even know you're there: the LLM advisory layer receives information about user agents in the grid, so the battery might sell more aggressively when it knows a user home needs energy.
+
 ## Emergent Behavior
 
 Nobody programs the agents to cooperate or compete in specific ways. Yet patterns emerge naturally:
@@ -46,5 +56,6 @@ Nobody programs the agents to cooperate or compete in specific ways. Yet pattern
 - The solar producer learns to hold back supply near sunset, anticipating evening demand
 - The home learns to buy extra during cheap midday hours
 - The battery becomes a sophisticated arbitrageur, timing its trades to market cycles
+- User agents introduce unpredictability, forcing AI agents to adapt to new market participants
 
 These emergent strategies arise purely from each agent optimizing its own position in a competitive market — exactly how real energy markets work.

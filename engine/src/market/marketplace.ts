@@ -32,6 +32,16 @@ export class Marketplace {
     this.agentAccounts.set(agentId, { keypair, tokenAccountAddress });
   }
 
+  unregisterAgent(agentId: string): void {
+    this.agentAccounts.delete(agentId);
+  }
+
+  clearTradesForAgent(agentId: string): void {
+    this.trades = this.trades.filter(
+      t => t.sellerId !== agentId && t.buyerId !== agentId
+    );
+  }
+
   clearOrders(): void {
     this.orderbook.clearAll();
   }

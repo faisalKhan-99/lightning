@@ -1,6 +1,7 @@
 'use client';
 
 import { useWebSocket } from '../../hooks/useWebSocket';
+import { useWallet } from '@solana/wallet-adapter-react';
 import MetricsBar from '../../components/MetricsBar';
 import DayCycle from '../../components/DayCycle';
 import PriceChart from '../../components/PriceChart';
@@ -9,9 +10,23 @@ import TradeFeed from '../../components/TradeFeed';
 import SupplyDemand from '../../components/SupplyDemand';
 import EnergyFlow from '../../components/EnergyFlow';
 import SystemStatus from '../../components/SystemStatus';
+import JoinGrid from '../../components/JoinGrid';
 
 export default function Dashboard() {
-  const { state, connected } = useWebSocket();
+  const { state, connected, send, joined, agentId, joinError, joining, setJoining } = useWebSocket();
+  const { publicKey } = useWallet();
+
+  const handleJoin = (phantomWallet: string, role: 'solar' | 'home' | 'battery') => {
+    console.log('[JOIN] handleJoin called:', { phantomWallet: phantomWallet.slice(0, 8) + '...', role });
+    setJoining(true);
+    send({ type: 'join', phantomWallet, role });
+  };
+
+  const handleLeave = () => {
+    if (publicKey) {
+      send({ type: 'leave', phantomWallet: publicKey.toBase58() });
+    }
+  };
 
   if (!state) {
     return (
@@ -37,7 +52,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-surface-0 bg-grid-overlay">
       {/* Top metrics bar */}
-      <MetricsBar state={state} connected={connected} />
+      <MetricsBar state={state} connected={connected} joined={joined} onLeave={handleLeave} />
 
       {/* Day/Night cycle indicator */}
       <div className="px-4 pt-4">
@@ -46,10 +61,17 @@ export default function Dashboard() {
 
       {/* Main content */}
       <div className="flex-1 grid grid-cols-12 gap-4 p-4">
-        {/* Left column: Agent cards */}
+        {/* Left column: Agent cards + Join Grid */}
         <div className="col-span-3 space-y-4">
+          {!joined && (
+            <JoinGrid onJoin={handleJoin} joining={joining} joinError={joinError} />
+          )}
           {state.agents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} />
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              isCurrentUser={agent.id === agentId}
+            />
           ))}
         </div>
 

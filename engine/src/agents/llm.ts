@@ -157,7 +157,8 @@ const TRANSITION_HOURS = [6, 10, 16, 22]; // dawn, mid-morning, afternoon, night
 export function buildMarketContext(
   marketplace: Marketplace,
   clock: SimulatedClock,
-  priceHistory: { time: string; price: number; simHour: number }[]
+  priceHistory: { time: string; price: number; simHour: number }[],
+  userAgentsSummary?: string
 ): string {
   const currentPrice = marketplace.pricing.getPrice();
   const movingAvg = marketplace.pricing.getMovingAverage();
@@ -176,7 +177,8 @@ Price Trend (last 10): [${last10Prices}]
 Moving Average (10-tick): ${movingAvg.toFixed(4)}
 Supply on orderbook: ${supply.toFixed(2)} kWh
 Demand on orderbook: ${demand.toFixed(2)} kWh
-Recent trades: ${tradesSummary}`;
+Recent trades: ${tradesSummary}
+User agents in grid: ${userAgentsSummary || 'None'}`;
 }
 
 export function buildAgentContext(
@@ -478,7 +480,8 @@ export async function getAgentDecisions(
   batteryAgent: BatteryAgent,
   homeBalance: number,
   batteryBalance: number,
-  scheduledInterval: number
+  scheduledInterval: number,
+  userAgentsSummary?: string
 ): Promise<{
   solar: AgentDecision | null;
   home: AgentDecision | null;
@@ -511,7 +514,7 @@ export async function getAgentDecisions(
     maxRpm: LLM_MAX_RPM,
   });
 
-  const marketCtx = buildMarketContext(marketplace, clock, priceHistory);
+  const marketCtx = buildMarketContext(marketplace, clock, priceHistory, userAgentsSummary);
 
   // Throttled sequential calls instead of parallel to respect rate limits
   const solar = await getAgentDecision('solar', marketCtx, buildAgentContext('solar', solarAgent, currentHour), currentTick, currentPrice, currentHour);

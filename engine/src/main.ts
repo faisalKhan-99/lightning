@@ -4,7 +4,8 @@ import { Marketplace } from './market/marketplace.js';
 import { SolarAgent } from './agents/solar.js';
 import { HomeAgent } from './agents/home.js';
 import { BatteryAgent } from './agents/battery.js';
-import { startWebSocketServer, broadcastState } from './server.js';
+import { UserManager } from './agents/userManager.js';
+import { initServer, broadcastState } from './server.js';
 import { MarketState } from './market/types.js';
 import { TICK_INTERVAL_MS, LLM_ENABLED, LLM_CALL_INTERVAL, ADAPTIVE_UPDATE_INTERVAL } from './config.js';
 import { Trade } from './market/types.js';
@@ -15,14 +16,17 @@ async function main() {
   logger.info('SYSTEM', '=== SolGrid: Autonomous Energy Market ===');
   logger.info('SYSTEM', `Log file: ${logger.getLogFilePath()}`);
 
-  // Start WebSocket server
-  startWebSocketServer();
-
   // Initialize Solana system
   const system = await initializeSystem();
 
   // Create marketplace
   const marketplace = new Marketplace();
+
+  // Create user manager
+  const userManager = new UserManager(system.mintAuthority, system.mint);
+
+  // Start WebSocket server (bidirectional)
+  initServer(userManager, marketplace);
 
   // Create agents
   const solarAgent = new SolarAgent(
@@ -64,6 +68,16 @@ async function main() {
     if (trade.buyerId === batteryAgent.id) {
       batteryAgent.recordTrade('buy', trade.amount, trade.pricePerUnit, marketPrice);
     }
+
+    // Track trades for user agents
+    for (const userAgent of userManager.getAllUsers()) {
+      if (trade.sellerId === userAgent.id) {
+        userAgent.recordTrade('sell', trade.amount, trade.pricePerUnit, marketPrice);
+      }
+      if (trade.buyerId === userAgent.id) {
+        userAgent.recordTrade('buy', trade.amount, trade.pricePerUnit, marketPrice);
+      }
+    }
   };
 
   // Create simulated clock
@@ -93,6 +107,12 @@ async function main() {
       const homeBalance = await homeAgent.getTokenBalance();
       const batteryBalance = await batteryAgent.getTokenBalance();
 
+      // Get user agents early so LLM can see them
+      const userAgents = userManager.getAllUsers();
+      const userSummary = userAgents.length > 0
+        ? userAgents.map(u => `${u.role} (demand: ${u.lastConsumption.toFixed(1)} kWh)`).join(', ')
+        : undefined;
+
       // LLM decisions - smart triggering with caching and backoff
       let solarDecision: AgentDecision | null = null;
       let homeDecision: AgentDecision | null = null;
@@ -110,7 +130,8 @@ async function main() {
           batteryAgent,
           homeBalance,
           batteryBalance,
-          LLM_CALL_INTERVAL
+          LLM_CALL_INTERVAL,
+          userSummary
         );
 
         solarDecision = decisions.solar;
@@ -136,7 +157,17 @@ async function main() {
       // 4. Battery agent: evaluate + trade
       await batteryAgent.tick(marketplace, batteryBalance, batteryDecision ?? undefined);
 
-      // 4.5 Update adaptive parameters every ADAPTIVE_UPDATE_INTERVAL ticks
+      // 4.5 Tick user agents
+      for (const userAgent of userAgents) {
+        try {
+          const userBalance = await userAgent.getTokenBalance();
+          await userAgent.tick(hour, marketplace, userBalance);
+        } catch (err) {
+          logger.error('USER_TICK', `User agent ${userAgent.id} tick error: ${err}`);
+        }
+      }
+
+      // 4.6 Update adaptive parameters every ADAPTIVE_UPDATE_INTERVAL ticks
       if (clock.getTickCount() % ADAPTIVE_UPDATE_INTERVAL === 0) {
         solarAgent.updateAdaptiveParams();
         homeAgent.updateAdaptiveParams();
@@ -177,21 +208,37 @@ async function main() {
         batteryAgent.getSolBalance(),
       ]);
 
+      // Build agent states (AI agents first)
+      const agentStates = [
+        solarAgent.getState(solarBal, solarSol),
+        homeAgent.getState(homeBal, homeSol),
+        batteryAgent.getState(batteryBal, batterySol),
+      ];
+
+      // Append user agent states
+      for (const userAgent of userAgents) {
+        try {
+          const [uBal, uSol] = await Promise.all([
+            userAgent.getTokenBalance(),
+            userAgent.getSolBalance(),
+          ]);
+          agentStates.push(userAgent.getState(uBal, uSol));
+        } catch (err) {
+          logger.error('USER_STATE', `Failed to get state for ${userAgent.id}: ${err}`);
+        }
+      }
+
       // 10. Build market state
       const state: MarketState = {
         currentPrice: price,
         priceHistory: [...priceHistory],
-        agents: [
-          solarAgent.getState(solarBal, solarSol),
-          homeAgent.getState(homeBal, homeSol),
-          batteryAgent.getState(batteryBal, batterySol),
-        ],
+        agents: agentStates,
         recentTrades: marketplace.getRecentTrades(),
         openOrders: marketplace.orderbook.getAllOpenOrders(),
         supplyDemand: { supply: supplyBeforeMatch, demand: demandBeforeMatch },
         metrics: {
-          totalMinted: solarAgent.totalMinted,
-          totalBurned: homeAgent.totalBurned,
+          totalMinted: solarAgent.totalMinted + userAgents.reduce((sum, u) => sum + u.totalMinted, 0),
+          totalBurned: homeAgent.totalBurned + userAgents.reduce((sum, u) => sum + u.totalBurned, 0),
           totalTraded: marketplace.totalTraded,
           totalTransactions: marketplace.totalTransactions,
         },
@@ -214,6 +261,7 @@ async function main() {
       logger.performance('Tick total', Date.now() - tickStart, {
         tick: clock.getTickCount(),
         trades: marketplace.getRecentTrades().length,
+        userAgents: userAgents.length,
       });
 
     } catch (err) {

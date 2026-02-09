@@ -29,6 +29,8 @@ const config: Config = {
         "txt-secondary": "#8896ab",
         "txt-tertiary": "#5a6a80",
         "txt-accent": "#7dd3fc",
+        // User agent color
+        user: "#34d399",
         // Semantic
         positive: "#34d399",
         negative: "#f87171",
@@ -37,6 +39,7 @@ const config: Config = {
         "glow-solar": "0 0 20px rgba(226, 179, 64, 0.3)",
         "glow-home": "0 0 20px rgba(91, 156, 245, 0.3)",
         "glow-battery": "0 0 20px rgba(167, 139, 250, 0.3)",
+        "glow-user": "0 0 20px rgba(52, 211, 153, 0.3)",
         "glow-positive": "0 0 12px rgba(52, 211, 153, 0.25)",
         "inner-highlight": "inset 0 1px 0 0 rgba(255,255,255,0.03)",
       },

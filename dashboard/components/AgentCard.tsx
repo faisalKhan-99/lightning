@@ -4,6 +4,7 @@ import { AgentState } from '../lib/types';
 
 interface Props {
   agent: AgentState;
+  isCurrentUser?: boolean;
 }
 
 const agentColors: Record<string, { border: string; text: string; icon: string; badge: string; bar: string }> = {
@@ -30,18 +31,30 @@ const agentColors: Record<string, { border: string; text: string; icon: string; 
   },
 };
 
-export default function AgentCard({ agent }: Props) {
+export default function AgentCard({ agent, isCurrentUser }: Props) {
   const color = agentColors[agent.type] || agentColors.solar;
 
   return (
-    <div className={`card-cyber border-l-2 ${color.border} p-4 hover:border-stroke-muted transition-colors`}>
+    <div className={`card-cyber border-l-2 ${color.border} p-4 hover:border-stroke-muted transition-all ${
+      isCurrentUser ? 'ring-1 ring-positive/50 shadow-glow-positive' : ''
+    }`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`${color.badge} font-mono text-[10px] uppercase font-bold px-2 py-0.5 rounded`}>
             {color.icon}
           </span>
           <h3 className={`font-semibold ${color.text}`}>{agent.name}</h3>
+          {agent.owner === 'user' && (
+            <span className="bg-positive/10 text-positive font-mono text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border border-positive/30">
+              User
+            </span>
+          )}
         </div>
+        {isCurrentUser && (
+          <span className="bg-positive/20 text-positive font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border border-positive/40 animate-pulse-slow">
+            YOU
+          </span>
+        )}
       </div>
 
       <div className="space-y-2 text-xs">
@@ -89,7 +102,10 @@ export default function AgentCard({ agent }: Props) {
         <div className="flex justify-between">
           <span className="text-txt-secondary">Wallet:</span>
           <span className="text-txt-tertiary font-mono text-[10px]">
-            {agent.walletAddress.slice(0, 8)}...{agent.walletAddress.slice(-4)}
+            {agent.phantomWallet
+              ? `${agent.phantomWallet.slice(0, 8)}...${agent.phantomWallet.slice(-4)}`
+              : `${agent.walletAddress.slice(0, 8)}...${agent.walletAddress.slice(-4)}`
+            }
           </span>
         </div>
 

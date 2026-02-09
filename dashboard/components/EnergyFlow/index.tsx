@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { AgentState, Trade } from '../../lib/types';
-import { calculateFlowData } from './flowUtils';
+import { calculateFlowData, calculateDynamicFlowData } from './flowUtils';
 
 const EnergyFlowPlayer = dynamic(() => import('./EnergyFlowPlayer'), {
   ssr: false,
@@ -21,11 +21,17 @@ interface Props {
 }
 
 export default function EnergyFlow({ agents, recentTrades, simulatedHour }: Props) {
-  const solar = agents.find((a) => a.type === 'solar');
-  const home = agents.find((a) => a.type === 'home');
-  const battery = agents.find((a) => a.type === 'battery');
+  const solar = agents.find((a) => a.type === 'solar' && a.owner === 'ai');
+  const home = agents.find((a) => a.type === 'home' && a.owner === 'ai');
+  const battery = agents.find((a) => a.type === 'battery' && a.owner === 'ai');
 
   const flowData = useMemo(() => calculateFlowData(recentTrades, simulatedHour), [recentTrades, simulatedHour]);
+
+  const hasUserAgents = agents.some(a => a.owner === 'user');
+  const dynamicData = useMemo(
+    () => hasUserAgents ? calculateDynamicFlowData(agents, recentTrades, simulatedHour) : null,
+    [agents, recentTrades, simulatedHour, hasUserAgents]
+  );
 
   const solarValue = `${solar?.production?.toFixed(1) || '0'} kWh`;
   const homeValue = `${home?.consumption?.toFixed(1) || '0'} kWh`;
@@ -34,12 +40,15 @@ export default function EnergyFlow({ agents, recentTrades, simulatedHour }: Prop
   return (
     <div className="card-cyber p-4">
       <h3 className="label-mono mb-3">Energy Flow</h3>
-      <div className="h-[280px]">
+      <div className={hasUserAgents ? 'h-[360px]' : 'h-[280px]'}>
         <EnergyFlowPlayer
           flowData={flowData}
           solarValue={solarValue}
           homeValue={homeValue}
           batteryValue={batteryValue}
+          dynamicNodes={dynamicData?.nodes}
+          dynamicFlows={dynamicData?.flows}
+          viewBoxHeight={dynamicData?.viewBoxHeight}
         />
       </div>
     </div>

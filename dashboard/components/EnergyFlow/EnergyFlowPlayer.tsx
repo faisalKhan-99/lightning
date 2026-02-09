@@ -3,13 +3,16 @@
 import React from 'react';
 import { Player } from '@remotion/player';
 import EnergyFlowComposition from './EnergyFlowComposition';
-import { FlowData } from './flowUtils';
+import { FlowData, DynamicNodeData, DynamicFlowPair } from './flowUtils';
 
 interface EnergyFlowPlayerProps {
   flowData: FlowData;
   solarValue: string;
   homeValue: string;
   batteryValue: string;
+  dynamicNodes?: DynamicNodeData[];
+  dynamicFlows?: DynamicFlowPair[];
+  viewBoxHeight?: number;
 }
 
 const EnergyFlowPlayer: React.FC<EnergyFlowPlayerProps> = ({
@@ -17,14 +20,18 @@ const EnergyFlowPlayer: React.FC<EnergyFlowPlayerProps> = ({
   solarValue,
   homeValue,
   batteryValue,
+  dynamicNodes,
+  dynamicFlows,
+  viewBoxHeight = 320,
 }) => {
   return (
     <Player
-      component={EnergyFlowComposition}
-      inputProps={{ flowData, solarValue, homeValue, batteryValue }}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      component={EnergyFlowComposition as any}
+      inputProps={{ flowData, solarValue, homeValue, batteryValue, dynamicNodes, dynamicFlows, viewBoxHeight }}
       durationInFrames={120}
       compositionWidth={500}
-      compositionHeight={320}
+      compositionHeight={viewBoxHeight}
       fps={30}
       loop
       autoPlay

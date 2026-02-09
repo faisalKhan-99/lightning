@@ -1,13 +1,16 @@
 'use client';
 
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { MarketState } from '../lib/types';
 
 interface Props {
   state: MarketState;
   connected: boolean;
+  joined?: boolean;
+  onLeave?: () => void;
 }
 
-export default function MetricsBar({ state, connected }: Props) {
+export default function MetricsBar({ state, connected, joined, onLeave }: Props) {
   const isDaytime = state.simulatedHour >= 6 && state.simulatedHour <= 18;
 
   return (
@@ -42,6 +45,15 @@ export default function MetricsBar({ state, connected }: Props) {
           </span>
         </div>
 
+        {joined && onLeave && (
+          <button
+            onClick={onLeave}
+            className="px-3 py-1 rounded-md border border-negative/40 bg-negative/10 text-negative text-xs font-mono uppercase tracking-wider hover:bg-negative/20 transition-colors"
+          >
+            Leave Grid
+          </button>
+        )}
+
         <div className="flex items-center gap-2">
           <span
             className={`w-2 h-2 rounded-full ring-1 ${
@@ -54,6 +66,8 @@ export default function MetricsBar({ state, connected }: Props) {
             {connected ? 'Live' : 'Disconnected'}
           </span>
         </div>
+
+        <WalletMultiButton className="!bg-solar/20 !border !border-solar/40 !rounded-md !text-xs !font-mono !h-8 hover:!bg-solar/30 !transition-colors" />
       </div>
     </div>
   );

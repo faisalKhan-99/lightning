@@ -15,13 +15,13 @@ The order book collects all these orders and sorts them:
 
 ## Order Matching
 
-When the highest bid meets or exceeds the lowest ask, a trade happens. The matching engine uses **price-time priority**:
+When the highest bid meets or exceeds the lowest ask, a trade happens. The matching engine uses **price priority with fair tie-breaking**:
 
 1. Best price wins — the most competitive orders match first
-2. If two orders have the same price, the one submitted first gets priority
+2. If two orders have the same price, the order is **randomized** — no agent gets systematic advantage
 3. Trades execute at the **seller's asking price**, not the buyer's bid
 
-This is a standard auction mechanism that naturally discovers fair market prices through competition.
+This means when a human player and an AI agent both bid the same price, each has a fair chance of being matched first. The randomization prevents the system from always favoring one type of participant over another.
 
 ## Dynamic Pricing
 

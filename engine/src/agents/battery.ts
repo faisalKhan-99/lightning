@@ -149,6 +149,7 @@ export class BatteryAgent extends BaseAgent {
       id: this.id,
       name: this.name,
       type: this.type,
+      owner: 'ai' as const,
       walletAddress: this.keypair.publicKey.toBase58(),
       tokenBalance,
       solBalance,
