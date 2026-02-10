@@ -347,11 +347,24 @@ async function main() {
   }
 
   // Start WebSocket server with callbacks
-  initServer(userManager, marketplace, {
+  const { httpServer } = initServer(userManager, marketplace, {
     onStart: startSimulation,
     onRestart: () => { resetSimulation(); },
-    onAllClientsGone: stopSimulation,
+    onFirstClient: () => {
+      logger.info('SYSTEM', 'First client connected');
+    },
+    onLastClientGone: stopSimulation,
   });
+
+  // Graceful shutdown
+  const shutdown = () => {
+    logger.info('SYSTEM', 'Shutting down...');
+    stopTickLoop();
+    httpServer.close();
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 
   console.log('\nSimulation idle, waiting for start command...\n');
 }

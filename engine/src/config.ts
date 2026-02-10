@@ -1,11 +1,12 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
-// Load .env from hackathon root
+// Load .env from hackathon root (local) or cwd (cloud)
 config({ path: resolve(process.cwd(), '../.env') });
+config({ path: resolve(process.cwd(), '.env') });
 
 export const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.devnet.solana.com';
-export const WS_PORT = Number(process.env.WS_PORT) || 8080;
+export const PORT = Number(process.env.PORT) || Number(process.env.WS_PORT) || 8080;
 
 // Simulation
 export const TICK_INTERVAL_MS = 5000; // 5 seconds per tick

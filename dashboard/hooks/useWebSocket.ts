@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MarketState, WsServerMessage } from '../lib/types';
 
-const WS_URL = 'ws://localhost:8080';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
 
 export type SimStatus = 'idle' | 'running' | 'completed';
 
@@ -19,6 +19,7 @@ export function useWebSocket() {
   const [simTotalTicks, setSimTotalTicks] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectDelayRef = useRef(2000); // starts at 2s, max 30s
 
   const send = useCallback((msg: object) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -45,6 +46,7 @@ export function useWebSocket() {
       ws.onopen = () => {
         console.log('Connected to engine');
         setConnected(true);
+        reconnectDelayRef.current = 2000; // reset backoff on success
       };
 
       ws.onmessage = (event) => {
@@ -97,15 +99,19 @@ export function useWebSocket() {
         console.log('Disconnected from engine');
         setConnected(false);
         wsRef.current = null;
-        // Auto-reconnect after 2 seconds
-        reconnectTimeoutRef.current = setTimeout(connect, 2000);
+        // Auto-reconnect with exponential backoff (2s → 30s)
+        const delay = reconnectDelayRef.current;
+        reconnectTimeoutRef.current = setTimeout(connect, delay);
+        reconnectDelayRef.current = Math.min(delay * 2, 30000);
       };
 
       ws.onerror = () => {
         ws.close();
       };
     } catch {
-      reconnectTimeoutRef.current = setTimeout(connect, 2000);
+      const delay = reconnectDelayRef.current;
+      reconnectTimeoutRef.current = setTimeout(connect, delay);
+      reconnectDelayRef.current = Math.min(delay * 2, 30000);
     }
   }, []);
 

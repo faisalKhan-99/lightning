@@ -33,7 +33,11 @@ function loadOrCreateKeypair(name: string, saved: SavedKeys | null, field: keyof
 }
 
 function saveKeys(keys: SavedKeys): void {
-  fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2));
+  try {
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2));
+  } catch {
+    console.log('  Could not save keys to disk (read-only FS), continuing...');
+  }
 }
 
 async function getBalance(keypair: Keypair): Promise<number> {
@@ -48,9 +52,19 @@ async function getBalance(keypair: Keypair): Promise<number> {
 export async function initializeSystem(): Promise<SystemAccounts> {
   console.log('Initializing Solana system on Devnet...\n');
 
-  // Load or create keypairs
+  // Load keypairs: prefer SOLANA_KEYS env var (base64 JSON), fall back to .keys.json file
   let saved: SavedKeys | null = null;
-  if (fs.existsSync(KEYS_FILE)) {
+  if (process.env.SOLANA_KEYS) {
+    try {
+      const decoded = Buffer.from(process.env.SOLANA_KEYS, 'base64').toString('utf-8');
+      saved = JSON.parse(decoded);
+      console.log('  Loaded keypairs from SOLANA_KEYS env var');
+    } catch {
+      console.log('  Failed to parse SOLANA_KEYS env var, falling back to file');
+      saved = null;
+    }
+  }
+  if (!saved && fs.existsSync(KEYS_FILE)) {
     try {
       saved = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf-8'));
       console.log('  Loaded existing keypairs from .keys.json');

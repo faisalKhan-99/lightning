@@ -1,11 +1,13 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import http from 'http';
 import { MarketState, WsClientMessage, WsJoinAck, WsLeaveAck, WsStateMessage, WsSimStatus } from './market/types.js';
-import { WS_PORT } from './config.js';
+import { PORT } from './config.js';
 import { UserManager } from './agents/userManager.js';
 import { Marketplace } from './market/marketplace.js';
 import { logger } from './utils/index.js';
 
 let wss: WebSocketServer;
+let httpServer: http.Server;
 let userManager: UserManager;
 let marketplace: Marketplace;
 
@@ -17,23 +19,57 @@ let currentSimStatus: 'idle' | 'running' | 'completed' = 'idle';
 let currentTick = 0;
 let currentTotalTicks = 0;
 
+// Idle timer
+const IDLE_TIMEOUT_MS = 60_000; // 60 seconds
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
 export interface EngineCallbacks {
   onStart: () => void;
   onRestart: () => void;
-  onAllClientsGone: () => void;
+  onFirstClient: () => void;
+  onLastClientGone: () => void;
 }
 
 let callbacks: EngineCallbacks;
+const startTime = Date.now();
 
-export function initServer(um: UserManager, mp: Marketplace, cb: EngineCallbacks): WebSocketServer {
+export function initServer(um: UserManager, mp: Marketplace, cb: EngineCallbacks): { wss: WebSocketServer; httpServer: http.Server } {
   userManager = um;
   marketplace = mp;
   callbacks = cb;
 
-  wss = new WebSocketServer({ port: WS_PORT });
+  // Create HTTP server with health endpoint
+  httpServer = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: currentSimStatus,
+        clients: wss ? wss.clients.size : 0,
+        paused: idleTimer !== null,
+        uptime: Math.floor((Date.now() - startTime) / 1000),
+      }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  // Attach WebSocket server to HTTP server
+  wss = new WebSocketServer({ server: httpServer });
 
   wss.on('connection', (ws) => {
     console.log('Dashboard connected');
+
+    // Cancel idle timer on new connection
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+
+    // Notify engine if this is the first client
+    if (wss.clients.size === 1) {
+      callbacks.onFirstClient();
+    }
 
     // Send current sim status to new connection immediately
     const statusMsg: WsSimStatus = {
@@ -68,16 +104,23 @@ export function initServer(um: UserManager, mp: Marketplace, cb: EngineCallbacks
         wsToWallet.delete(ws);
       }
 
-      // Check if all clients are gone
+      // Start idle timer when all clients disconnect
       if (wss.clients.size === 0) {
-        logger.info('WS', 'All clients disconnected');
-        callbacks.onAllClientsGone();
+        logger.info('WS', `All clients disconnected, starting ${IDLE_TIMEOUT_MS / 1000}s idle timer`);
+        idleTimer = setTimeout(() => {
+          idleTimer = null;
+          logger.info('WS', 'Idle timeout reached');
+          callbacks.onLastClientGone();
+        }, IDLE_TIMEOUT_MS);
       }
     });
   });
 
-  console.log(`WebSocket server running on ws://localhost:${WS_PORT}`);
-  return wss;
+  httpServer.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} (HTTP + WebSocket)`);
+  });
+
+  return { wss, httpServer };
 }
 
 async function handleMessage(ws: WebSocket, msg: WsClientMessage): Promise<void> {
