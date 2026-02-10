@@ -52,7 +52,7 @@ export default function Dashboard() {
           <h1 className="font-mono text-2xl font-bold text-solar mb-3">SolGrid</h1>
           <p className="text-txt-secondary mb-2 text-sm">Connecting to engine...</p>
           <p className="text-txt-tertiary text-xs">
-            Make sure the engine is running on ws://localhost:8080
+            Connecting to engine server...
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <span className="w-2 h-2 rounded-full bg-solar animate-pulse-slow ring-1 ring-solar/50" />
