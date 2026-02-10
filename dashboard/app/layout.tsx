@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import WalletProvider from "../components/WalletProvider";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -32,6 +33,7 @@ export default function RootLayout({
         <WalletProvider>
           {children}
         </WalletProvider>
+        <Analytics />
       </body>
     </html>
   );
