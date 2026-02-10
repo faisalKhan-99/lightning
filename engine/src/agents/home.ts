@@ -20,6 +20,12 @@ export class HomeAgent extends BaseAgent {
     this.strategy = `Consume energy, maintain ${HOME_TARGET_BUFFER} kWh buffer, buy at 105% market`;
   }
 
+  reset(): void {
+    this.resetMemory();
+    this.lastConsumption = 0;
+    this.totalBurned = 0;
+  }
+
   async tick(hour: number, marketplace: Marketplace, currentBalance: number, decision?: AgentDecision): Promise<void> {
     const consumption = getHomeConsumption(hour);
     this.lastConsumption = consumption;

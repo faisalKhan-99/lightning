@@ -93,7 +93,7 @@ export default function AgentCard({ agent, isCurrentUser }: Props) {
             <div className="w-full bg-surface-2 rounded-full h-1.5">
               <div
                 className={`${color.bar} h-1.5 rounded-full transition-all`}
-                style={{ width: `${(agent.storageLevel / agent.storageCapacity) * 100}%` }}
+                style={{ width: `${Math.min((agent.storageLevel / agent.storageCapacity) * 100, 100)}%` }}
               />
             </div>
           </div>

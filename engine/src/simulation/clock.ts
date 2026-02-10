@@ -44,4 +44,10 @@ export class SimulatedClock {
   isDaytime(): boolean {
     return this.simHour >= 6 && this.simHour <= 18;
   }
+
+  reset(): void {
+    this.simHour = 6;
+    this.dayNumber = 1;
+    this.tickCount = 0;
+  }
 }

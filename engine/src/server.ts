@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { MarketState, WsClientMessage, WsJoinAck, WsLeaveAck, WsStateMessage } from './market/types.js';
+import { MarketState, WsClientMessage, WsJoinAck, WsLeaveAck, WsStateMessage, WsSimStatus } from './market/types.js';
 import { WS_PORT } from './config.js';
 import { UserManager } from './agents/userManager.js';
 import { Marketplace } from './market/marketplace.js';
@@ -12,14 +12,37 @@ let marketplace: Marketplace;
 // Track which WebSocket belongs to which wallet
 const wsToWallet = new Map<WebSocket, string>();
 
-export function initServer(um: UserManager, mp: Marketplace): WebSocketServer {
+// Current sim status (server tracks this to send on new connections)
+let currentSimStatus: 'idle' | 'running' | 'completed' = 'idle';
+let currentTick = 0;
+let currentTotalTicks = 0;
+
+export interface EngineCallbacks {
+  onStart: () => void;
+  onRestart: () => void;
+  onAllClientsGone: () => void;
+}
+
+let callbacks: EngineCallbacks;
+
+export function initServer(um: UserManager, mp: Marketplace, cb: EngineCallbacks): WebSocketServer {
   userManager = um;
   marketplace = mp;
+  callbacks = cb;
 
   wss = new WebSocketServer({ port: WS_PORT });
 
   wss.on('connection', (ws) => {
     console.log('Dashboard connected');
+
+    // Send current sim status to new connection immediately
+    const statusMsg: WsSimStatus = {
+      type: 'sim_status',
+      status: currentSimStatus,
+      tick: currentTick,
+      totalTicks: currentTotalTicks,
+    };
+    ws.send(JSON.stringify(statusMsg));
 
     ws.on('message', async (raw) => {
       try {
@@ -43,6 +66,12 @@ export function initServer(um: UserManager, mp: Marketplace): WebSocketServer {
           logger.info('WS', `Auto-removed user agent for wallet ${wallet.slice(0, 8)}...`);
         }
         wsToWallet.delete(ws);
+      }
+
+      // Check if all clients are gone
+      if (wss.clients.size === 0) {
+        logger.info('WS', 'All clients disconnected');
+        callbacks.onAllClientsGone();
       }
     });
   });
@@ -96,7 +125,40 @@ async function handleMessage(ws: WebSocket, msg: WsClientMessage): Promise<void>
       logger.info('WS', `User left: ${msg.phantomWallet.slice(0, 8)}...`);
       break;
     }
+
+    case 'start_sim': {
+      logger.info('WS', 'Start simulation requested');
+      callbacks.onStart();
+      break;
+    }
+
+    case 'restart_sim': {
+      logger.info('WS', 'Restart simulation requested');
+      callbacks.onRestart();
+      break;
+    }
   }
+}
+
+export function broadcastSimStatus(status: 'idle' | 'running' | 'completed', tick?: number, totalTicks?: number): void {
+  currentSimStatus = status;
+  currentTick = tick ?? 0;
+  currentTotalTicks = totalTicks ?? 0;
+
+  if (!wss) return;
+
+  const msg: WsSimStatus = {
+    type: 'sim_status',
+    status,
+    tick,
+    totalTicks,
+  };
+  const data = JSON.stringify(msg);
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
 }
 
 export function broadcastState(state: MarketState): void {

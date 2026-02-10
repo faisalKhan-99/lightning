@@ -37,4 +37,9 @@ export class PricingEngine {
   getPriceHistory(): number[] {
     return [...this.priceHistory];
   }
+
+  reset(): void {
+    this.currentPrice = BASE_PRICE;
+    this.priceHistory = [BASE_PRICE];
+  }
 }

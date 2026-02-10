@@ -10,6 +10,8 @@ export const WS_PORT = Number(process.env.WS_PORT) || 8080;
 // Simulation
 export const TICK_INTERVAL_MS = 5000; // 5 seconds per tick
 export const SIM_SPEED = 720; // 1 tick = 1 simulated hour (24 ticks = 1 day)
+export const SIM_DURATION_DAYS = 2; // Number of simulated days per run
+export const SIM_TOTAL_TICKS = SIM_DURATION_DAYS * 24; // 48 ticks for 2 days
 
 // Pricing
 export const BASE_PRICE = 0.10;

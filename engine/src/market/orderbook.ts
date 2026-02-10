@@ -66,6 +66,12 @@ export class OrderBook {
     this.buyOrders = [];
   }
 
+  reset(): void {
+    this.sellOrders = [];
+    this.buyOrders = [];
+    nextOrderId = 1;
+  }
+
   getTotalSupply(): number {
     return this.sellOrders
       .filter(o => o.amount - o.filled > 0)

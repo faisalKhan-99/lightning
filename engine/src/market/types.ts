@@ -71,7 +71,15 @@ export interface WsLeaveMessage {
   phantomWallet: string;
 }
 
-export type WsClientMessage = WsJoinMessage | WsLeaveMessage;
+export interface WsStartSimMessage {
+  type: 'start_sim';
+}
+
+export interface WsRestartSimMessage {
+  type: 'restart_sim';
+}
+
+export type WsClientMessage = WsJoinMessage | WsLeaveMessage | WsStartSimMessage | WsRestartSimMessage;
 
 // WebSocket message types (server → client)
 export interface WsJoinAck {
@@ -91,7 +99,14 @@ export interface WsStateMessage {
   data: MarketState;
 }
 
-export type WsServerMessage = WsJoinAck | WsLeaveAck | WsStateMessage;
+export interface WsSimStatus {
+  type: 'sim_status';
+  status: 'idle' | 'running' | 'completed';
+  tick?: number;
+  totalTicks?: number;
+}
+
+export type WsServerMessage = WsJoinAck | WsLeaveAck | WsStateMessage | WsSimStatus;
 
 export interface MarketState {
   currentPrice: number;
@@ -110,5 +125,5 @@ export interface MarketState {
   simulatedHour: number;
   dayNumber: number;
   tickCount: number;
-  systemStatus: 'initializing' | 'running' | 'paused' | 'error';
+  systemStatus: 'initializing' | 'running' | 'paused' | 'error' | 'idle' | 'completed';
 }

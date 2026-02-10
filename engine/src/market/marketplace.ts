@@ -153,6 +153,15 @@ export class Marketplace {
     return newTrades;
   }
 
+  reset(): void {
+    this.trades = [];
+    this.totalTraded = 0;
+    this.totalTransactions = 0;
+    this.orderbook.reset();
+    this.pricing.reset();
+    nextTradeId = 1;
+  }
+
   getRecentTrades(count: number = 20): Trade[] {
     return this.trades.slice(-count);
   }

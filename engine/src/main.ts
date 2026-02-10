@@ -5,12 +5,13 @@ import { SolarAgent } from './agents/solar.js';
 import { HomeAgent } from './agents/home.js';
 import { BatteryAgent } from './agents/battery.js';
 import { UserManager } from './agents/userManager.js';
-import { initServer, broadcastState } from './server.js';
+import { initServer, broadcastState, broadcastSimStatus } from './server.js';
 import { MarketState } from './market/types.js';
-import { TICK_INTERVAL_MS, LLM_ENABLED, LLM_CALL_INTERVAL, ADAPTIVE_UPDATE_INTERVAL } from './config.js';
+import { TICK_INTERVAL_MS, SIM_TOTAL_TICKS, LLM_ENABLED, LLM_CALL_INTERVAL, ADAPTIVE_UPDATE_INTERVAL } from './config.js';
 import { Trade } from './market/types.js';
 import { getAgentDecisions, AgentDecision } from './agents/llm.js';
 import { logger } from './utils/index.js';
+import { burnTokens } from './chain/token.js';
 
 async function main() {
   logger.info('SYSTEM', '=== SolGrid: Autonomous Energy Market ===');
@@ -24,9 +25,6 @@ async function main() {
 
   // Create user manager
   const userManager = new UserManager(system.mintAuthority, system.mint);
-
-  // Start WebSocket server (bidirectional)
-  initServer(userManager, marketplace);
 
   // Create agents
   const solarAgent = new SolarAgent(
@@ -84,15 +82,26 @@ async function main() {
   const clock = new SimulatedClock();
 
   // Price history for chart
-  const priceHistory: { time: string; price: number; simHour: number }[] = [];
+  let priceHistory: { time: string; price: number; simHour: number }[] = [];
 
-  console.log('\nStarting simulation loop...\n');
+  // --- Simulation state ---
+  let simStatus: 'idle' | 'running' | 'completed' = 'idle';
+  let tickInterval: ReturnType<typeof setInterval> | null = null;
 
   // Tick loop
   const tickLoop = async () => {
     const tickStart = Date.now();
 
     try {
+      // Check if simulation is complete
+      if (clock.getTickCount() >= SIM_TOTAL_TICKS) {
+        stopTickLoop();
+        simStatus = 'completed';
+        logger.info('SYSTEM', `Simulation COMPLETED (${SIM_TOTAL_TICKS} ticks)`);
+        broadcastSimStatus('completed', clock.getTickCount(), SIM_TOTAL_TICKS);
+        return;
+      }
+
       // 1. Advance clock
       clock.tick();
       const hour = clock.getHour();
@@ -246,11 +255,14 @@ async function main() {
         simulatedHour: hour,
         dayNumber: clock.getDayNumber(),
         tickCount: clock.getTickCount(),
-        systemStatus: 'running',
+        systemStatus: simStatus,
       };
 
       // 11. Broadcast to dashboard
       broadcastState(state);
+
+      // Also broadcast sim progress
+      broadcastSimStatus('running', clock.getTickCount(), SIM_TOTAL_TICKS);
 
       // Log tick completion and performance
       logger.marketState(clock.getTickCount(), price, supplyBeforeMatch, demandBeforeMatch);
@@ -269,11 +281,79 @@ async function main() {
     }
   };
 
-  // Run tick loop
-  setInterval(tickLoop, TICK_INTERVAL_MS);
+  function stopTickLoop(): void {
+    if (tickInterval) {
+      clearInterval(tickInterval);
+      tickInterval = null;
+    }
+  }
 
-  // Run first tick immediately
-  await tickLoop();
+  function startSimulation(): void {
+    if (simStatus === 'running') return;
+    simStatus = 'running';
+    logger.info('SYSTEM', 'Tick loop STARTED');
+    broadcastSimStatus('running', 0, SIM_TOTAL_TICKS);
+    tickInterval = setInterval(tickLoop, TICK_INTERVAL_MS);
+    // Run first tick immediately
+    tickLoop();
+  }
+
+  async function resetSimulation(): Promise<void> {
+    stopTickLoop();
+    logger.info('SYSTEM', 'Resetting simulation...');
+
+    // Best-effort burn all agent tokens
+    const agents = [solarAgent, homeAgent, batteryAgent];
+    for (const agent of agents) {
+      try {
+        const balance = await agent.getTokenBalance();
+        if (balance > 0.001) {
+          await burnTokens(agent.keypair, system.mint, agent.tokenAccountAddress, balance);
+          logger.info('RESET', `Burned ${balance.toFixed(4)} tokens from ${agent.id}`);
+        }
+      } catch (err) {
+        logger.warn('RESET', `Failed to burn tokens for ${agent.id}: ${err}`);
+      }
+    }
+
+    // Reset all state
+    clock.reset();
+    marketplace.reset();
+    solarAgent.reset();
+    homeAgent.reset();
+    batteryAgent.reset();
+    priceHistory = [];
+
+    simStatus = 'idle';
+    logger.info('SYSTEM', 'Simulation reset to idle');
+    broadcastSimStatus('idle');
+  }
+
+  function stopSimulation(): void {
+    stopTickLoop();
+    // Only reset if not already idle
+    if (simStatus !== 'idle') {
+      simStatus = 'idle';
+      logger.info('SYSTEM', 'All clients disconnected — simulation stopped');
+      // Reset state for next connection
+      clock.reset();
+      marketplace.reset();
+      solarAgent.reset();
+      homeAgent.reset();
+      batteryAgent.reset();
+      priceHistory = [];
+      broadcastSimStatus('idle');
+    }
+  }
+
+  // Start WebSocket server with callbacks
+  initServer(userManager, marketplace, {
+    onStart: startSimulation,
+    onRestart: () => { resetSimulation(); },
+    onAllClientsGone: stopSimulation,
+  });
+
+  console.log('\nSimulation idle, waiting for start command...\n');
 }
 
 main().catch((err) => {

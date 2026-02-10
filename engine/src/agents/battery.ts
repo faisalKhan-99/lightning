@@ -19,8 +19,13 @@ export class BatteryAgent extends BaseAgent {
     this.strategy = 'Buy low (< 85% avg), sell high (> 115% avg), max 50 kWh';
   }
 
+  reset(): void {
+    this.resetMemory();
+    this.storageLevel = 0;
+  }
+
   async tick(marketplace: Marketplace, currentBalance: number, decision?: AgentDecision): Promise<void> {
-    this.storageLevel = currentBalance;
+    this.storageLevel = Math.min(currentBalance, BATTERY_MAX_CAPACITY);
     this.reasoning = decision?.reasoning || '';
     const currentPrice = marketplace.pricing.getPrice();
     const movingAvg = marketplace.pricing.getMovingAverage();

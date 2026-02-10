@@ -26,6 +26,12 @@ export class SolarAgent extends BaseAgent {
     this.strategy = 'Produce energy during daylight, sell at 95% market price';
   }
 
+  reset(): void {
+    this.resetMemory();
+    this.lastProduction = 0;
+    this.totalMinted = 0;
+  }
+
   async tick(hour: number, marketplace: Marketplace, decision?: AgentDecision): Promise<void> {
     const production = getSolarOutput(hour);
     this.lastProduction = production;

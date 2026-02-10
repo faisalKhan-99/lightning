@@ -8,9 +8,10 @@ interface Props {
   connected: boolean;
   joined?: boolean;
   onLeave?: () => void;
+  simTotalTicks?: number;
 }
 
-export default function MetricsBar({ state, connected, joined, onLeave }: Props) {
+export default function MetricsBar({ state, connected, joined, onLeave, simTotalTicks }: Props) {
   const isDaytime = state.simulatedHour >= 6 && state.simulatedHour <= 18;
 
   return (
@@ -41,7 +42,7 @@ export default function MetricsBar({ state, connected, joined, onLeave }: Props)
         <div className="flex items-center gap-1">
           <span className="text-txt-secondary text-xs">Tick:</span>
           <span className="bg-surface-2 px-2 py-0.5 rounded text-txt-primary font-mono text-xs">
-            {state.tickCount}
+            {state.tickCount}{simTotalTicks ? `/${simTotalTicks}` : ''}
           </span>
         </div>
 

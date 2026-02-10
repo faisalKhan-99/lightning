@@ -49,6 +49,23 @@ export abstract class BaseAgent {
     this.tokenAccountAddress = tokenAccount.address;
   }
 
+  resetMemory(): void {
+    this.memory = {
+      totalProfit: 0,
+      tradesWon: 0,
+      tradesLost: 0,
+      recentProfits: [],
+      avgBuyPrice: 0,
+      avgSellPrice: 0,
+      predictedPrices: [],
+      actualPrices: [],
+      riskLevel: 0.5,
+      llmTrustScore: 0.5,
+    };
+    this.activity = 'Idle';
+    this.reasoning = '';
+  }
+
   async getTokenBalance(): Promise<number> {
     return getTokenBalance(this.tokenAccountAddress);
   }

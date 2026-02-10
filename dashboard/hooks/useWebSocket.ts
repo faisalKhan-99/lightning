@@ -5,6 +5,8 @@ import { MarketState, WsServerMessage } from '../lib/types';
 
 const WS_URL = 'ws://localhost:8080';
 
+export type SimStatus = 'idle' | 'running' | 'completed';
+
 export function useWebSocket() {
   const [state, setState] = useState<MarketState | null>(null);
   const [connected, setConnected] = useState(false);
@@ -12,6 +14,9 @@ export function useWebSocket() {
   const [agentId, setAgentId] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [simStatus, setSimStatus] = useState<SimStatus>('idle');
+  const [simTick, setSimTick] = useState(0);
+  const [simTotalTicks, setSimTotalTicks] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -23,6 +28,14 @@ export function useWebSocket() {
       console.warn('[WS] Cannot send — WebSocket not open. readyState:', wsRef.current?.readyState);
     }
   }, []);
+
+  const startSim = useCallback(() => {
+    send({ type: 'start_sim' });
+  }, [send]);
+
+  const restartSim = useCallback(() => {
+    send({ type: 'restart_sim' });
+  }, [send]);
 
   const connect = useCallback(() => {
     try {
@@ -44,6 +57,10 @@ export function useWebSocket() {
             switch (msg.type) {
               case 'state':
                 setState(msg.data);
+                // Derive sim status from system status
+                if (msg.data.systemStatus === 'running') {
+                  setSimStatus('running');
+                }
                 break;
               case 'join_ack':
                 console.log('[WS] Received join_ack:', JSON.stringify(msg));
@@ -60,6 +77,11 @@ export function useWebSocket() {
                 setJoined(false);
                 setAgentId(null);
                 setJoinError(null);
+                break;
+              case 'sim_status':
+                setSimStatus(msg.status);
+                setSimTick(msg.tick ?? 0);
+                setSimTotalTicks(msg.totalTicks ?? 0);
                 break;
             }
           } else {
@@ -95,5 +117,19 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return { state, connected, send, joined, agentId, joinError, joining, setJoining };
+  return {
+    state,
+    connected,
+    send,
+    joined,
+    agentId,
+    joinError,
+    joining,
+    setJoining,
+    simStatus,
+    simTick,
+    simTotalTicks,
+    startSim,
+    restartSim,
+  };
 }
