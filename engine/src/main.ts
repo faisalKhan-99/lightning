@@ -93,12 +93,13 @@ async function main() {
     const tickStart = Date.now();
 
     try {
-      // Check if simulation is complete
+      // Check if simulation is complete — auto-restart for continuous demo
       if (clock.getTickCount() >= SIM_TOTAL_TICKS) {
-        stopTickLoop();
-        simStatus = 'completed';
-        logger.info('SYSTEM', `Simulation COMPLETED (${SIM_TOTAL_TICKS} ticks)`);
+        logger.info('SYSTEM', `Simulation cycle COMPLETED (${SIM_TOTAL_TICKS} ticks), restarting...`);
         broadcastSimStatus('completed', clock.getTickCount(), SIM_TOTAL_TICKS);
+        stopTickLoop();
+        await resetSimulation();
+        startSimulation();
         return;
       }
 
@@ -352,6 +353,12 @@ async function main() {
     onRestart: () => { resetSimulation(); },
     onFirstClient: () => {
       logger.info('SYSTEM', 'First client connected');
+      // Auto-start or resume simulation when a client connects
+      if (simStatus === 'idle') {
+        startSimulation();
+      } else if (simStatus === 'completed') {
+        resetSimulation().then(() => startSimulation());
+      }
     },
     onLastClientGone: stopSimulation,
   });
