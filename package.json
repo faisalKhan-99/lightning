@@ -1,5 +1,5 @@
 {
-  "name": "solgrid",
+  "name": "solgrid", 
   "private": true,
   "scripts": {
     "engine": "cd engine && npx tsx src/main.ts",
