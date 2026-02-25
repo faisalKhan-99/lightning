@@ -22,6 +22,17 @@ export default function Footer() {
         <p className="mt-8 text-txt-tertiary text-xs font-mono">
           SolGrid &mdash; Autonomous Energy Trading on Solana
         </p>
+        <p className="mt-4 text-txt-tertiary text-xs font-mono">
+          Contact us:{' '}
+          <a
+            href="https://x.com/Lightningenrgy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-solar hover:underline"
+          >
+            @Lightningenrgy
+          </a>
+        </p>
       </div>
     </section>
   );
